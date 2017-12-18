@@ -1,0 +1,406 @@
+#!/usr/bin/python
+
+from utils_libs import *
+
+from sklearn.model_selection import train_test_split
+from sklearn import preprocessing
+
+# --- utilities ---
+def parse_date_time_minute(x):
+    tmp = datetime.datetime.fromtimestamp(x/1000.0)
+    return str(tmp.year) +'-'+ str(tmp.month)+'-'+str(tmp.day)+' '+ str(tmp.hour) + '-' + str(tmp.minute)
+
+def parse_date_time_hour(x):
+    tmp = datetime.datetime.fromtimestamp(x/1000.0)
+    return str(tmp.hour)
+
+def multivariate_ts_plot( dta_df, title_str ):
+    
+    matplotlib.rcParams.update({'font.size': 15})
+    figure_size = (15.4,7)
+    legend_font = 8.5
+    fig = plt.figure()
+    fig.set_size_inches( figure_size )
+    
+    tmpt = range(dta_df.shape[0])
+    for i in dta_df.columns:
+        
+        tmpx = list(dta_df[i])    
+        plt.plot( tmpt, tmpx, label= i )
+
+    plt.title( title_str )
+    plt.ylabel('Value')
+    plt.xlabel('Time')
+    # plt.legend( loc='upper left',fontsize=12 )
+    plt.legend(loc='upper left')
+    #     bbox_to_anchor=(0., 1.0, 1., .10),
+    #            loc=0,
+    #            ncol=5, mode="expand", borderaxespad=0., fontsize= legend_font , numpoints=1 )
+    
+def plot_features( test_ask, test_bid ):
+    # price
+    fig1, ax1 = plt.subplots() 
+    fig1.set_size_inches((15,7))
+    ax1.plot( [i[0][0] for i in test_ask], label = 'ask' )
+    ax1.plot( [i[0][0] for i in test_bid], label = 'bid' )
+    plt.legend()
+    plt.title( "Price mean" )
+    
+    # amount
+    fig2, ax2 = plt.subplots() 
+    fig2.set_size_inches((15,7))
+    ax2.plot( [i[0][1] for i in test_ask] , label = 'ask' )
+    ax2.plot( [i[0][1] for i in test_bid] , label = 'bid' )
+    plt.legend()
+    plt.title( "Amount mean" )
+    
+    # price variance
+    fig3, ax3 = plt.subplots() 
+    fig3.set_size_inches((15,7))
+    ax3.plot( [i[1][0][0] for i in test_ask] , label = 'ask' )
+    ax3.plot( [i[1][0][0] for i in test_bid] , label = 'bid' )
+    plt.legend()
+    plt.title( "Price variance" )
+    
+    # amount variance 
+    fig4, ax4 = plt.subplots() 
+    fig4.set_size_inches((15,7))
+    ax4.plot( [i[1][1][1] for i in test_ask] , label = 'ask' )
+    ax4.plot( [i[1][1][1] for i in test_bid] , label = 'bid' )
+    plt.legend()
+    plt.title( "Amount variance" )
+    
+    # price and amount covariance
+    fig5, ax5 = plt.subplots() 
+    fig5.set_size_inches((15,7))
+    ax5.plot( [i[1][0][1] for i in test_ask] , label = 'ask' )
+    ax5.plot( [i[1][0][1] for i in test_bid] , label = 'bid' )
+    plt.legend()
+    plt.title( "Price and Amount covariance" )
+
+
+# --- prepare training and testing data ---
+
+def training_testing_statistic(features_minu, vol_hour, all_loc_hour, \
+                                  order_minu, order_hour, train_split_ratio):
+    tmpcnt = len(vol_hour)
+    ex = []
+    
+    for i in range(1, tmpcnt):
+        if len(features_minu)!=0:
+            
+            tmp_minu_idx = all_loc_hour[i] 
+            if tmp_minu_idx - order_minu < 0:
+                print "Order_minute ?"
+            ex.append( np.asarray(features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]).flatten() )
+        
+    tmp_split = int(train_split_ratio*(tmpcnt-order_hour-1)) + order_hour
+            
+    # xtrain, extrain, xtest, extest
+    return vol_hour[1:tmp_split+1], ex[:tmp_split], vol_hour[tmp_split+1:], ex[tmp_split:]
+
+'''
+def training_testing_statistic(features_minu, vol_hour, all_loc_hour, \
+                                  order_minu, order_hour, train_split_ratio):
+    tmpcnt = len(vol_hour)
+    ex = []
+    
+    for i in range(tmpcnt):
+        if len(features_minu)!=0:
+            
+            tmp_minu_idx = all_loc_hour[i] 
+            if tmp_minu_idx - order_minu < 0:
+                print "Order_minute ?"
+            ex.append( np.asarray(features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]).flatten() )
+        
+    tmp_split = int(train_split_ratio*(tmpcnt-order_hour)) + order_hour
+            
+    # xtrain, extrain, xtest, extest
+    return vol_hour[:tmp_split], ex[:tmp_split], vol_hour[tmp_split:], ex[tmp_split:] 
+'''
+
+def prepare_feature_target(features_minu, req_minu, vol_hour, all_loc_hour, \
+                                  order_minu, order_hour ):
+    tmpcnt = len(vol_hour)
+    y = []
+    x = []
+    
+    for i in range( order_hour, tmpcnt ):
+        y.append( vol_hour[i] )
+        
+        x.append( [vol_hour[i-order_hour:i]] )
+        
+        if len(req_minu)!=0:
+            tmp_minu_idx = all_loc_hour[i] 
+            if tmp_minu_idx - order_minu < 0:
+                print "Order_minute ?"
+            x[-1].append( req_minu[tmp_minu_idx-order_minu : tmp_minu_idx] )
+
+        if len(features_minu)!=0:
+            
+            tmp_minu_idx = all_loc_hour[i] 
+            if tmp_minu_idx - order_minu < 0:
+                print "Order_minute ?"
+            x[-1].append( features_minu[tmp_minu_idx-order_minu : tmp_minu_idx] )
+            
+            '''
+            x[-1].append([])
+            tmp_pt = tmp_minu_idx
+            tmp_cnt = 0
+            
+            while tmp_pt>=0:
+                
+                if features_minu[tmp_pt][-1]>1 and features_minu[tmp_pt][-2]>1:
+                    x[-1][-1].append( [features_minu[tmp_pt]] )
+                    tmp_cnt += 1
+                if tmp_cnt >= order_minu:
+                    break
+                tmp_pt -= 1
+            '''    
+    
+    return x,y
+ 
+def conti_normalization_train_dta(dta):
+    
+    original_shape = np.shape(dta)
+    
+    if len(original_shape)>=3:
+        tmp_dta = np.reshape(dta, [original_shape[0], -1] )
+        normed_dta = preprocessing.scale(tmp_dta) 
+        
+        return np.reshape(normed_dta, original_shape)
+    else:
+        return preprocessing.scale(dta)
+
+def conti_normalization_test_dta(dta, train):
+    
+    shape_train = np.shape(train)
+    shape_dta   = np.shape(dta)
+    
+    if len(shape_train)>=3:
+        tmp_train = np.reshape(train, [shape_train[0], -1])
+        tmp_dta   = np.reshape(dta,   [shape_dta[0], -1])
+    else:
+        tmp_train = train
+        tmp_dta   = dta
+    
+    mean_dim = np.mean(tmp_train, axis=0)
+    std_dim = np.std(tmp_train, axis=0)
+    
+#    print '--test--', mean_dim, std_dim
+    
+    df = pd.DataFrame()
+    dta_df = pd.DataFrame(tmp_dta)   
+    cols = range(np.shape(tmp_dta)[1])
+    
+#    print '--test--', cols
+    
+    for i in cols:
+        df[i] = (dta_df[i]- mean_dim[i])*1.0/std_dim[i]
+    
+    if len(shape_train)>=3:
+        return np.reshape(df.as_matrix(), shape_dta)
+    else:
+        return df.as_matrix()
+
+
+def training_testing_mixture_rnn(x, y, train_split_ratio):
+    
+    '''
+    for i in range(len(x)):
+        ins = x[i]
+        
+        tmp = []
+        for j in ins:
+            tmp.append( list(np.asarray(j).flatten()) )
+        
+        x[i] = tmp
+    '''
+
+    tmp_split = int(train_split_ratio*len(y))
+    
+    return x[:tmp_split], y[:tmp_split], x[tmp_split:], y[tmp_split:]
+
+
+def training_testing_mixture_mlp(x, y, train_split_ratio):
+    
+    for i in range(len(x)):
+        ins = x[i]
+        
+        tmp = []
+        for j in ins:
+            tmp.append( list(np.asarray(j).flatten()) )
+        
+        x[i] = tmp
+
+    tmp_split = int(train_split_ratio*len(y))
+    
+    return x[:tmp_split], y[:tmp_split], x[tmp_split:], y[tmp_split:]
+
+
+def training_testing_plain_regression(x, y, train_split_ratio): 
+    
+    for i in range(len(x)):
+        ins = x[i]
+        tmp = []
+        for j in ins:
+            tmp += list(np.asarray(j).flatten())        
+        x[i] = tmp
+    
+    tmp_split = int(train_split_ratio*len(y))
+    
+    xtrain = x[:tmp_split]
+    xtest  = x[tmp_split:]
+    
+    # feature normalization 
+    xtest = conti_normalization_test_dta(  xtest, xtrain )
+    xtrain= conti_normalization_train_dta( xtrain )
+    
+    return xtrain, y[:tmp_split], xtest, y[tmp_split:]
+
+
+# --- calculate metrics in order book data ---
+
+# price, volumn w.r.t. minute
+
+def cal_price_req_minu(data_minu):
+    
+    price_minu =[]
+    req_minu   =[]
+    
+    for i in range(len(data_minu)):
+        
+        if len(data_minu[i][0])==0:
+            #print "\n at minute ", i, " ask "
+            price_minu.append( max([j[0] for j in data_minu[i][1]]) )
+    
+        elif len(data_minu[i][1])==0:
+            #print "\n at minute ", i, " bid "
+            price_minu.append( min([j[0] for j in data_minu[i][0]]) )
+    
+        else:
+            tmpmin = min([j[0] for j in data_minu[i][0]])
+            tmpmax = max([j[0] for j in data_minu[i][1]])
+        
+            price_minu.append( (tmpmin + tmpmax)/2.0 )
+    
+        req_minu.append( [len(data_minu[i][0]), len(data_minu[i][1])] )
+        
+        
+    return price_minu, req_minu
+    
+# price volatility w.r.t. hour
+def cal_price_volatility_hour( loc_hour, price_minu ):
+    pvol_hour = []
+    
+    for i in range(1, len(loc_hour)):
+        pvol_hour.append( sqrt(var(price_minu[ loc_hour[i-1]:loc_hour[i] ])) )
+        
+    pvol_hour.append( sqrt(var(price_minu[ loc_hour[i]: ])) )
+    
+    return pvol_hour
+
+
+# return volatility w.r.t. hour
+def cal_return_volatility_hour( loc_hour, price_minu, return_type ):
+    rvol_hour = []
+    return_minu = []
+    
+    #print 'Begin'
+    
+    for i in range(1, len(loc_hour)):
+        tmp = price_minu[ loc_hour[i-1]:loc_hour[i] ]
+        
+        if len(tmp)<=1:
+            rvol_hour.append( 0.0 )
+            continue
+            #print loc_hour[i-1], loc_hour[i]
+        
+        tmp_return =[]
+        for j in range(1, len(tmp)):
+            
+            if return_type == 'per':
+                # percent change return
+                tmp_return.append( (tmp[j]-tmp[j-1])/(tmp[j-1]+1e-5)*100 )
+            elif return_type == 'log':
+                # log return
+                tmp_return.append(log(tmp[j]*1.0/(tmp[j-1]+1e-5)+1e-5))
+    
+        return_minu += tmp_return    
+        rvol_hour.append( np.std(tmp_return) )
+        #rvol_hour.append( sqrt(var(tmp_return)) )
+        
+                     
+    tmp = price_minu[ loc_hour[i]: ]
+    tmp_return =[]
+    for j in range(1, len(tmp)):
+        tmp_return.append(log(tmp[j]*1.0/(tmp[j-1]+1e-5)+1e-5))
+    
+    #rvol_hour.append( sqrt(var(tmp_return)) )
+    rvol_hour.append( np.std(tmp_return) )
+    return_minu+=tmp_return
+    
+    #print 'Done'
+    
+    return return_minu, rvol_hour
+
+# --- Load order book data files ---
+# --- organize data into minute-wise format ---  
+def load_raw_order_book_files(file_addr, bool_dump):
+    
+    files = sorted(glob.glob(file_addr))
+
+    all_dta_minu = []
+    all_loc_hour = []
+
+    for i in range( len(files) ):
+        dta_df = pd.read_csv( files[i] ,sep=',')
+        print "Current : " + files[i], dta_df.shape
+    
+        all_df = dta_df
+    
+        all_df['date_time'] = all_df['date'].map( parse_date_time_minute )
+        all_df['hour']      = all_df['date'].map( parse_date_time_hour )
+
+        minute_tick = list(all_df['date_time'].unique())
+        print "   ", len(minute_tick), minute_tick[-1]
+    
+        dta_minu = [] 
+        tmp_hour = []
+    
+        for i in range(len(minute_tick)):
+            tmp_df = all_df[ all_df['date_time']==minute_tick[i] ]
+    
+            tmp_df_a = np.asarray( tmp_df[tmp_df['type']=='a'][['price','amount']] )
+            tmp_df_b = np.asarray( tmp_df[tmp_df['type']=='b'][['price','amount']] )
+    
+            dta_minu.append( [tmp_df_a, tmp_df_b] )    
+            tmp_hour.append( tmp_df['hour'].iloc[0] )
+    
+        pre_hour = 0 
+        loc_hour = []
+    
+        offset = len(all_dta_minu)
+        loc_hour.append( offset )
+    
+        for i in range(len(minute_tick)):
+            if i==0:
+                pre_hour = tmp_hour[i]
+            else:
+                if tmp_hour[i] != pre_hour:
+                    loc_hour.append(i+offset)
+                    pre_hour = tmp_hour[i]
+        
+    
+        all_dta_minu += dta_minu
+        all_loc_hour += loc_hour
+    
+        print "   ", len(all_dta_minu), len(all_loc_hour)
+    
+    if bool_dump == True:
+        np.asarray(all_dta_minu).dump("../dataset/bitcoin/dta_minu.dat")
+        np.asarray(all_loc_hour).dump("../dataset/bitcoin/loc_hour.dat") 
+    
+    return all_dta_minu, all_loc_hour
+    
+

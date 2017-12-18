@@ -1,0 +1,219 @@
+
+--- Finished ---
+
+pipeline: feature extraction module, traing-testing data format, training and evalution of models, 
+
+serverl models: gradient boosted tree, random forest, bayesian regression
+
+For neural network: feature normalization 
+
+likelihood evalution
+
+mixture linear
+
+mixture rnn
+
+Batch normalization (for feed-forward and convolutional neural networks) and layer normalization (for recurrent neural networks) 
+
+number of minute distribution 
+
+AIC BIC
+
+skewness
+
+regularization on tree and regression methods, bayesian parameters
+
+fixed expert variance 
+include ask bid request features 
+absolute errors
+
+outliers in minute features 
+
+Ling-box test on autocorrelation
+
+Student’s t
+
+--- To Do ---
+
+Rolling and unifed training and testing 
+
+Feature seletion
+  Feature selection for high-dimensional data: A fast correlation-based filter solution
+
+Baseline: 
+  moving average and filter, Gaussain process, Lasso
+
+multi-head attention:  all you need is attention
+
+Auxililary loss: diversity of experts
+
+GARCH
+neual mixture tunning 
+
+Model variance reduction:
+  https://stackoverflow.com/questions/45206910/tensorflow-exponential-moving-average
+  https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
+
+
+
+QQ plot
+
+neural network approach: outrageously large neural networks the sparsely gated mixture of expert layer
+
+Tunning gates:
+  bias in _linear function
+  
+
+Feature engineering
+  bid-ask spread
+  quantile 
+  order imbalance
+  depth chart that shows the cumulative bids and asks
+  price shift
+  slope
+  
+  Bitcoin - CNY
+  
+
+Mixture: 
+   
+   attention
+   gate constraint, gate stability problem 
+   gate logit activaition from neural network 
+   
+   smooth on expert gate: Learning Factored Representations in a Deep Mixture of Experts
+
+   activation on the last layer
+
+
+GARCH
+
+Structural time series
+
+
+test first, exponetial regression, log normal regression
+
+
+mixture_lstm_generative
+
+Baseline: aggregate to the same grnularity, gaussian process 
+
+
+Sparse & regularization:
+  Relevance Vector Machines
+  Spike and slab 
+  L1/L0 norm
+
+bayesian mixture 
+bayesian rnn
+
+Parametric Rectified Linear Unit (PReLU)
+
+variance reduction in the estimator for sampling 
+
+Auxiliary superision in loss functions
+
+
+--- python math operators ---
+
+np.subtract.outer
+squeeze
+np.linalg.inv(C).dot(B.T).T.dot(y)
+
+np.outer(b, a)
+np.add( [tmp1, tmp2] )
+
+
+
+---- Paper write-up ----
+
+
+Features of volatility series:  no unit root, stocastic trend, local level shift 
+
+
+attention, mixture, hierachical structure, heterogenous 
+
+Improved expressiveness, Improved generalization
+
+mixture of feature specific expert
+
+
+One way traders can view order book depth, in addition to the method above, is to use a depth chart that shows the cumulative bids and asks in the current market. This technique illustrates the total volume on the order books starting from the value of the latest transaction.
+
+
+---- Reference ----
+
+https://tradeblock.com/blog/bitcoin-trading-interpreting-order-books/
+
+
+
+
+-- Deep learning and attention
+
+Attention is all you need
+
+Multiple object recognition with visual attention 
+
+The Neural Hawkes Process: A Neurally Self-Modulating Multivariate Point Process : Monte Carlo Gradient
+
+Residual RNN
+
+(2017)hierarchical multiscale RNN
+
+Distilling the Knowledge in a Neural Network
+
+outrageously large neural networks the sparsely gated mixture of expert layer
+
+Fine-Grained Classification via Mixture of Deep Convolutional Neural Networks
+
+Learning Factored Representations in a Deep Mixture of Experts
+
+Adaptive Feature Abstraction for Translating Video to Text
+
+-- Statistical
+
+paper Inferring The Latent Structure of Human Decision-Making from Raw
+
+4.3. Variance Reduction Policy gradients methods are notorious for suffering from high-variance gradients, since it is computationally expensive to obtain enough rollouts from the simulator to match the policy distribution. Therefore, we apply several variance-reduction techniques, such as replay buffer (Schaul et al., 2015) and baseline methods (Williams, 1992).
+
+ADVI: variational inference
+
+(2015)Probabilistic Dynamic Causal Model for Temporal
+
+-- time series
+
+Extracting Interpretable Features for Early Classification on Time Series
+
+Structure-based Statistical Features and Multivariate Time Series Clustering
+
+
+-- bitcoin
+
+Trading Bitcoin and Online Time Series Prediction
+
+Quantifying bid-ask spreads in the Chinese stock market using
+limit-order book data
+
+Order Book Characteristics and the Volume-Volatility Relation: Empirical Evidence from a Limit Order Market
+
+
+---- Evaluation ----
+
+hyper-parameters for the benchmark models were chosen
+
+the sensitivity of the model's performance with respect to the architecture of the 'Significance' network
+
+rmse, 
+
+prediction distribution  A v.s. B 
+
+log-likelihood 
+
+Performance w.r.t. different data property, approach property
+
+relation reveald by the model
+
+Wilcoxon signed-rank test
+
+
+
