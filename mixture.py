@@ -1211,8 +1211,6 @@ def bn_dense_layers_with_output(dim_layers, x, dim_x, dim_output, scope, dropout
         return tf.squeeze(output), h, regularizer
     
 
-    
-    
 def context_from_hiddens_lstm(h, bool_attention):
     if bool_attention == True:
         return 0
@@ -1221,6 +1219,7 @@ def context_from_hiddens_lstm(h, bool_attention):
         h = tmp_hiddens[-1]
             
         return h
+    
     
 # ---- Mixture LSTM ----
 

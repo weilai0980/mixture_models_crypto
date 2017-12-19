@@ -168,11 +168,11 @@ def gbt_train_validate(xtrain, ytrain, xtest, ytest, fix_lr, bool_clf, result_fi
         
         # save testing resutls under the best model
         py = model0.predict( xtest )
-        np.savetxt("res/pytest_gbt.txt", zip(pyt, ytest), delimiter=',')
+        np.savetxt("res/pytest_gbt.txt", zip(py, ytest), delimiter=',')
         
         # save training resutls under the best model
         py = model0.predict( xtrain )
-        np.savetxt("res/pytest_gbt.txt", zip(py, ytrain), delimiter=',')
+        np.savetxt("res/pytrain_gbt.txt", zip(py, ytrain), delimiter=',')
         
         return model0
     else:
@@ -526,7 +526,7 @@ def elastic_net_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_
     # save the best model
     joblib.dump(model, model_file)
         
-    print "Errors:", err_min
+    print "RMSE:", err_min
     
     # save overall errors
     with open(result_file, "a") as text_file:
@@ -570,7 +570,7 @@ def bayesian_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model
         tmp_tr = sqrt(mean((exp(pytrain)-ytrain)*(exp(pytrain)-ytrain)))
         tmp_ts = sqrt(mean((exp(pytest) -ytest)*(exp(pytest)-ytest)))
     
-    print "Errors:", tmp_tr, tmp_ts 
+    print "RMSE: ", tmp_tr, tmp_ts 
     
     # save the best model
     joblib.dump(bayesian_reg, model_file)
@@ -629,7 +629,7 @@ def ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_fi
     else:
         tmp_tr = sqrt(mean((exp(pytrain)-ytrain)*(exp(pytrain)-ytrain)))
     
-    print "Errors:", min(tmp_err, key = lambda x:x[1])[0], tmp_tr, best_err
+    print "RMSE: ", min(tmp_err, key = lambda x:x[1])[0], tmp_tr, best_err
     
     # save best model 
     joblib.dump(best_model, model_file)
@@ -643,6 +643,97 @@ def ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_fi
     np.savetxt("res/pytest_ridge.txt", zip(py, ytest), delimiter=',')
     
     # save training resutls under the best model
-    py = best_model.predict( xtest )
+    py = best_model.predict( xtrain )
     np.savetxt("res/pytrain_ridge.txt", zip(py, ytrain), delimiter=',')
+
+# ++++ gaussian process ++++
+
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import *
+
+def gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, trans_ytrain):
+    
+    print "\nStart to train Gaussian process"
+    
+    kernel = 1.0*RBF(length_scale=41.8) + 1.0*RBF(length_scale=180) * ExpSineSquared(length_scale=1.44, periodicity=1) \
++ RationalQuadratic(alpha=17.7, length_scale=0.957) +  RBF(length_scale=0.138) + WhiteKernel(noise_level=0.0336)
+    
+    gp = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, optimizer = 'fmin_l_bfgs_b', normalize_y = True )
+    
+    gp.fit(xtrain, ytrain)
+    #gp.kernel_, gp.alpha_
+    
+    print "\n Begin to evaluate Gaussian process regression"
+    
+    pytrain, sigma_train = gp.predict(xtrain, return_std=True)
+    pytest,  sigma_test  = gp.predict(xtest, return_std=True)
+    
+    tmp_tr = sqrt(mean((pytrain-ytrain)*(pytrain-ytrain)))
+    tmp_ts = sqrt(mean((pytest-ytest)*(pytest-ytest)))
+    
+    print "RMSE: ", tmp_tr, tmp_ts
+    
+    # save best model 
+    joblib.dump(best_model, model_file)
+    
+    # save the overall errors
+    with open(result_file, "a") as text_file:
+        text_file.write( "Gaussian process regression: %f, %f \n"%(tmp_tr, tmp_ts) )
+    
+    # save testing resutls under the best model
+    py = gp.predict( xtest )
+    np.savetxt("res/pytest_gp.txt", zip(py, ytest), delimiter=',')
+    
+    # save training resutls under the best model
+    py = gp.predict( xtrain )
+    np.savetxt("res/pytrain_gp.txt", zip(py, ytrain), delimiter=',')
+    
+
+# ++++ lasso regression ++++
+
+from sklearn import linear_model
+
+def lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, trans_ytrain):
+    
+    print "\nStart to train Lasso regression"
+    
+    tmp_range = [0, 0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 4, 6]
+    tmp_err = []
+       
+    for alpha_trial in tmp_range:
+        
+        reg = linear_model.Lasso(alpha = alpha_trial, fit_intercept = True, normalize = True) 
+        reg.fit(xtrain, ytrain)
+        #clf.coef_, clf.intercept_
+        
+        pytest = reg.predict(xtest)
+        tmp_ts = sqrt(mean((pytest-ytest)*(pytest-ytest)))
+        
+        tmp_err.append([alpha_trial, tmp_ts, reg])
+        
+        print alpha_trial, tmp_ts
+        
+    pytrain = reg.predict(xtrain)
+    tmp_tr = sqrt(mean((pytrain-ytrain)*(pytrain-ytrain)))
+    
+    print "RMSE: ", min(tmp_err, key = lambda x:x[1])[0], tmp_tr, min(tmp_err, key = lambda x:x[1])[1]
+    
+    # save best model 
+    best_model = min(tmp_err, key = lambda x:x[1])[2]
+    joblib.dump(best_model, model_file)
+    
+    # save the overall errors
+    with open(result_file, "a") as text_file:
+        text_file.write( "Lasso regression: %f, %f, %f \n"%(min(tmp_err, key = lambda x:x[1])[0],\
+                                                                       tmp_tr, min(tmp_err, key = lambda x:x[1])[1]))
+    
+    # save testing resutls under the best model
+    py = reg.predict( xtest )
+    np.savetxt("res/pytest_lasso.txt", zip(py, ytest), delimiter=',')
+    
+    # save training resutls under the best model
+    py = reg.predict( xtrain )
+    np.savetxt("res/pytrain_lasso.txt", zip(py, ytrain), delimiter=',')
+    
+
 
