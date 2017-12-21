@@ -119,11 +119,22 @@ def training_testing_statistic(features_minu, vol_hour, all_loc_hour, \
     return vol_hour[:tmp_split], ex[:tmp_split], vol_hour[tmp_split:], ex[tmp_split:] 
 '''
 
+# feature gropus: auto regressive volatility,  order book 
+
+def selection_on_minute_features(x):
+    
+    ipca = PCA(n_components=4)
+    ipca.fit(x)
+    return ipca.transform(x), sum(ipca.explained_variance_ratio_)
+
 def prepare_feature_target(features_minu, req_minu, vol_hour, all_loc_hour, \
-                                  order_minu, order_hour ):
+                           order_minu, order_hour, bool_feature_selection):
+    
     tmpcnt = len(vol_hour)
     y = []
     x = []
+    
+    var_explained = []
     
     for i in range( order_hour, tmpcnt ):
         y.append( vol_hour[i] )
@@ -141,7 +152,18 @@ def prepare_feature_target(features_minu, req_minu, vol_hour, all_loc_hour, \
             tmp_minu_idx = all_loc_hour[i] 
             if tmp_minu_idx - order_minu < 0:
                 print "Order_minute ?"
-            x[-1].append( features_minu[tmp_minu_idx-order_minu : tmp_minu_idx] )
+            
+            
+            if bool_feature_selection == True:
+                
+                tmpfeatures = features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]
+                tmpft, tmpvar = selection_on_minute_features(tmpfeatures)
+                
+                var_explained.append( tmpvar )
+                x[-1].append( tmpft )
+                
+            else:
+                x[-1].append( features_minu[tmp_minu_idx-order_minu : tmp_minu_idx] )
             
             '''
             x[-1].append([])
@@ -158,8 +180,9 @@ def prepare_feature_target(features_minu, req_minu, vol_hour, all_loc_hour, \
                 tmp_pt -= 1
             '''    
     
-    return x,y
- 
+    return x,y, var_explained
+
+
 def conti_normalization_train_dta(dta):
     
     original_shape = np.shape(dta)
@@ -345,7 +368,7 @@ def cal_return_volatility_hour( loc_hour, price_minu, return_type ):
     return return_minu, rvol_hour
 
 # --- Load order book data files ---
-# --- organize data into minute-wise format ---  
+# organize data into minute-wise format 
 def load_raw_order_book_files(file_addr, bool_dump):
     
     files = sorted(glob.glob(file_addr))
@@ -403,4 +426,265 @@ def load_raw_order_book_files(file_addr, bool_dump):
     
     return all_dta_minu, all_loc_hour
     
+
+# --- extract features from asking and biding sides in order book ---
+# TO DO: quantile features
+
+# distributional features
+
+# analytical posterior: sampling by enumerating and calculating density
+# approximate posterior: sampling via MCMC
+    
+# pymc?
+def poterior_sample_norm_2d(x, n_samples):
+    return 1
+    
+def poterior_sample_log_norm_2d(x, n_samples):
+    return 1
+    
+def map_log_norm_2d(x):
+    
+    if len(x) == 0:
+        return [0.0, 0.0], [0.0, 0.0, 0.0]
+    
+    elif len(x) == 1:
+        return [ x[0][0], x[0][1] ], [0.0, 0.0, 0.0]
+    
+    else:
+        
+        tmpx = [ [i[0]+1e-5, i[1]+1e-5] for i in x]
+        logx = log(tmpx)
+        
+        post_log_mu, post_log_cov = map_norm_2d(logx)
+        
+        post_mu = [ exp(post_log_mu[i] + post_log_cov[i]/2.0) for i in range(2) ]
+        
+#         post_cov = [ [0.0, 0.0] for i in range(2) ]
+        
+#         for i in range(2):
+#             for j in range(2):
+#                 tmp = post_log_cov[2] if i!=j else post_log_cov[i]  
+#                 post_cov[i][j] = exp( post_log_mu[i]+post_log_mu[j]+0.5*(post_log_cov[i]+post_log_cov[j]) )*\
+#                 ( exp(tmp)-1.0 )
+                
+        var0 = exp( post_log_mu[0]+post_log_mu[0]+0.5*(post_log_cov[0]+post_log_cov[0]) )*\
+        ( exp(post_log_cov[0])-1.0 )
+        var1 = exp( post_log_mu[1]+post_log_mu[1]+0.5*(post_log_cov[1]+post_log_cov[1]) )*\
+        ( exp(post_log_cov[1])-1.0 )
+        cov = exp( post_log_mu[0]+post_log_mu[1]+0.5*(post_log_cov[0]+post_log_cov[1]) )*\
+        ( exp(post_log_cov[2])-1.0 )
+        
+        return list(post_mu), [var0, var1, cov], list(post_mu), \
+               [post_log_cov[0][0], post_log_cov[1][1], post_log_cov[0][1]] 
+
+def map_norm_2d( x ):
+    
+    if len(x) == 0:
+        return [0.0, 0.0], [0.0, 0.0, 0.0]
+    
+    elif len(x) == 1:
+        return [ x[0][0], x[0][1] ], [0.0, 0.0, 0.0]
+    
+    else:
+        mle_mu  = np.mean(x, axis=0) 
+        mle_cov = np.cov(x, rowvar=0)
+    
+        m_0 = mle_mu
+        k0  = 0.01
+        v0 = 2.0 + 2.0
+        S_0 = np.diag(np.diag(mle_cov))*1.0/len(x)
+    
+        x_ba = mle_mu
+    
+        #S = np.zeros((2, 2))
+        #for i in x:
+        #    S = np.add(S, np.outer(i, i))
+            
+        S = np.matmul( np.asmatrix(x).transpose() , np.asmatrix(x) )
+        
+        N = len(x)
+        m_N = k0*1.0/(k0+N)*m_0 + N*1.0/(k0+N)*x_ba 
+    
+        vN = v0 + N    
+        kN = k0 + N
+        
+        S_N = S_0 + S + k0*np.outer(m_0, m_0) - kN*np.outer(m_N, m_N)
+        
+        cov_mode = S_N*1.0/(vN+2.0+2.0)
+        
+        return list(m_N), [ cov_mode.item((0, 0)), cov_mode.item((1, 1)), cov_mode.item((1, 0)) ] 
+    
+def mle_norm_2d( x ):
+    
+    if len(x) == 0:
+        return [0.0, 0.0], [0.0, 0.0]
+    elif len(x) == 1:
+        return [x[0][0], x[0][1]], [0.0, 0.0]
+    else:
+        tmp = np.cov(x, rowvar=0)
+        return list(np.mean(x, axis=0)), [tmp[0][0], tmp[1][1]] 
+    
+def skewness(x):
+    
+    if len(x) == 0:
+        return [0.0, 0.0]
+
+    elif len(x) == 1:
+        return [0.0, 0.0]
+    
+    else:
+        return list(sp.stats.skew(x,0))
+    
+def loglk_norm( x, mu, cov ):
+    
+    var = multivariate_normal(mean=mu, cov=[[cov[0], cov[2]], [cov[2],cov[1]]])
+    return sum( var.logpdf(x) )
+
+def likelihood_ratio_test(llmin, llmax, df):
+    return sp.stats.chisqprob(-2.0*(llmin-llmax), df)
+
+
+# financial features added by Nino
+def bid_ask_spread(all_dta_minu, tmp_idx):
+    x_a = all_dta_minu[tmp_idx][0]
+    x_b = all_dta_minu[tmp_idx][1]
+    
+    #if ask side is empty --- find last ask side and use it
+    if (market_depth_a_volume(x_a)==0):
+        return abs(find_last_ask_price(all_dta_minu, tmp_idx)-x_b[0][0])
+    
+    #if bid side is empty -- find last bid side and use it
+    if (market_depth_b_volume(x_b)==0):
+        return abs(x_a[0][0] - find_last_bid_price(all_dta_minu, tmp_idx))
+    
+    #calucate difference -- spread
+    return abs(x_a[0][0]-x_b[0][0])
+
+def bid_ask_spread_weighted(all_dta_minu, tmp_idx):
+    x_a = all_dta_minu[tmp_idx][0]
+    x_b = all_dta_minu[tmp_idx][1]
+    
+    #either bid or ask side is empty -- call just bid_ask_spread function
+    if ((market_depth_b_volume(x_b)==0)|(market_depth_a_volume(x_a)==0)):
+        return bid_ask_spread(all_dta_minu, tmp_idx)
+    
+    
+    # calculate avg bid on first 10 % of orders
+    idx = np.shape(x_b)[0]/10
+    
+    if (idx==0): #smaller than 10
+        idx = np.shape(x_b)[0]
+    
+    #cumulative price of 10% of bid volume
+    cum_bid = 0.0
+    for i in range ( idx ):
+        cum_bid+=x_b[i][0]
+    cum_bid = cum_bid/idx
+    
+    # calculate avg ask on first 10 % of orders
+    idx = np.shape(x_a)[0]/10
+    
+    if (idx==0): #smaller than 10
+        idx = np.shape(x_a)[0]
+    
+    #cumulative price of 10% of bid volume
+    cum_ask = 0.0
+    for i in range ( idx ):
+        cum_ask+=x_a[i][0]
+    cum_ask = cum_ask/idx
+    
+    return abs(cum_ask-cum_bid)
+
+def market_depth_a_volume(x_a):
+    #number of orders
+    return (np.shape(x_a)[0])
+
+def market_depth_b_volume(x_b):
+    #number of orders
+    return (np.shape(x_b)[0])
+
+def market_depth_a_btc(x_a):
+    #sum of btc in ask side
+    btc_sum = 0.0
+    for i in range ( np.shape(x_a)[0] ):
+        btc_sum+=x_a[i][1]
+    return btc_sum
+
+def market_depth_b_btc(x_b):
+    #sum of btc in bid side
+    btc_sum = 0.0
+    for i in range ( np.shape(x_b)[0] ):
+        btc_sum+=x_b[i][1]
+    return btc_sum
+
+def find_last_bid_price(all_dta_minu, idx):
+    #search for last available bid
+    tmp_b = all_dta_minu[idx][1]
+    while(market_depth_b_volume(tmp_b)==0):
+        idx=idx-1;
+        tmp_b = all_dta_minu[idx][1]
+        
+    return tmp_b[0][0]
+
+def find_last_ask_price(all_dta_minu, idx):
+    #search for last available ask
+    tmp_a = all_dta_minu[idx][0]
+    while(market_depth_a_volume(tmp_a)==0):
+        idx=idx-1;
+        tmp_a = all_dta_minu[idx][0]
+        
+    return tmp_a[0][0]
+
+def bid_ask_slope(all_dta_minu, tmp_idx):
+    #calculated the volume in the tail that belongs closest to the current price
+    #essentially sum until some delta price -- is estimated from data -> from first 10 % of orders
+    x_a = all_dta_minu[tmp_idx][0]
+    x_b = all_dta_minu[tmp_idx][1]
+    
+    if (market_depth_b_volume(x_b)==0): #bid is empty
+        cum_bid = 0.0
+        idx = np.shape(x_a)[0]/10 #use 10% on ask sid
+        delta = abs(x_a[idx][0] - x_a[0][0]) #critical value for summation
+    else:
+        #find delta valule for price for the first 10% of orders on bid side and use it also for ask side
+        idx = np.shape(x_b)[0]/10
+        delta = abs(x_b[idx][0] - x_b[0][0]) #critical value for summation
+    
+        #cumulative volume of orders on bid side until the delta price
+        cum_bid = 0.0
+        for i in range ( idx ):
+            cum_bid+=x_b[i][1]
+        
+    if (market_depth_a_volume(x_a)==0): #ask is empty
+        cum_ask = 0
+    else:    
+        #cumulative volume of orders on ask side until the delta price
+        cum_ask = 0.0
+        for i in range ( np.shape(x_a)[0] ):
+            if ( x_a[i][0]  <= (delta+x_a[0][0]) ):
+                cum_ask+=x_a[i][1]
+    
+    
+    return cum_bid, cum_ask
+    
+
+def orderbook_stat_features(all_dta_minu, tmp_idx):
+    tmp_a = all_dta_minu[tmp_idx][0]
+    tmp_b = all_dta_minu[tmp_idx][1]
+ 
+    f = []
+    f.append(bid_ask_spread(all_dta_minu, tmp_idx))
+    f.append(bid_ask_spread_weighted(all_dta_minu, tmp_idx))
+    f.append(market_depth_a_volume(tmp_a))
+    f.append(market_depth_b_volume(tmp_b))
+    f.append(market_depth_a_volume(tmp_a)-market_depth_b_volume(tmp_b))
+    f.append(market_depth_a_btc(tmp_a))
+    f.append(market_depth_b_btc(tmp_b))
+    f.append(market_depth_a_btc(tmp_a)-market_depth_b_btc(tmp_b))
+    cum_bid, cum_ask = bid_ask_slope(all_dta_minu, tmp_idx)
+    f.append(cum_bid)
+    f.append(cum_ask)
+    return f
+
+
 

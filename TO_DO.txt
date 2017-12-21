@@ -33,32 +33,37 @@ Ling-box test on autocorrelation
 
 Student’s t
 
---- To Do ---
-
-Rolling and unifed training and testing 
+Gaussain process, Lasso
 
 Feature seletion
   Feature selection for high-dimensional data: A fast correlation-based filter solution
+  Feature Subset Selection and Feature Ranking for Multivariate Time Series
+
+--- To Do ---
+
+quantile features
+
+Seasonality check 
+  
+Training scheme
+  Rolling and unifed training and testing 
 
 Baseline: 
-  moving average and filter, Gaussain process, Lasso
+  moving average and filter,  GARCH
 
-multi-head attention:  all you need is attention
+Regualariation 
 
 Auxililary loss: diversity of experts
 
-GARCH
-neual mixture tunning 
+
+multi-head attention:  all you need is attention
 
 Model variance reduction:
   https://stackoverflow.com/questions/45206910/tensorflow-exponential-moving-average
   https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
 
-
-
 QQ plot
 
-neural network approach: outrageously large neural networks the sparsely gated mixture of expert layer
 
 Tunning gates:
   bias in _linear function
@@ -149,6 +154,8 @@ https://tradeblock.com/blog/bitcoin-trading-interpreting-order-books/
 
 
 -- Deep learning and attention
+
+Outrageously large neural networks the sparsely gated mixture of expert layer
 
 Attention is all you need
 
