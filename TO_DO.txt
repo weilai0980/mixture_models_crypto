@@ -41,15 +41,20 @@ Feature seletion
 
 --- To Do ---
 
+Baseline: 
+  moving average and filter,  GARCH
+
+Gaussain process volatility model 
+
 quantile features
 
 Seasonality check 
   
+  
 Training scheme
   Rolling and unifed training and testing 
 
-Baseline: 
-  moving average and filter,  GARCH
+
 
 Regualariation 
 
@@ -178,6 +183,8 @@ Learning Factored Representations in a Deep Mixture of Experts
 Adaptive Feature Abstraction for Translating Video to Text
 
 -- Statistical
+
+bayesian mixture models for multivariate time series with an application to austrilian rainfall data
 
 paper Inferring The Latent Structure of Human Decision-Making from Raw
 

@@ -226,6 +226,32 @@ def conti_normalization_test_dta(dta, train):
     else:
         return df.as_matrix()
 
+    
+def training_testing_garch(vol_hour, all_loc_hour, order_hour, train_split_ratio, price_minu):
+    
+    tmpcnt = len(vol_hour)
+    tmp_split = int(train_split_ratio*(tmpcnt - order_hour - 1)) + order_hour
+            
+    return_hour = []
+    for i in range(1, len(all_loc_hour)):
+        tmp = price_minu[ all_loc_hour[i-1]:all_loc_hour[i] ]
+        
+        tmp_return =[]
+        for j in range(1, len(tmp)):
+            tmp_return.append( (tmp[j]-tmp[j-1])/(tmp[j-1]+1e-5)*100 )
+            
+        return_hour.append( mean(tmp_return) )
+        
+    tmp = price_minu[ all_loc_hour[i]: ]
+    tmp_return =[]
+    for j in range(1, len(tmp)):
+        tmp_return.append( (tmp[j]-tmp[j-1])/(tmp[j-1]+1e-5)*100 )
+    
+    return_hour.append( mean(tmp_return) )
+    
+    # vol train, return train, vol test, return test
+    return vol_hour[1:tmp_split+1], return_hour[1:tmp_split+1], vol_hour[tmp_split+1:], return_hour[tmp_split+1:]
+
 
 def training_testing_mixture_rnn(x, y, train_split_ratio):
     
@@ -357,13 +383,17 @@ def cal_return_volatility_hour( loc_hour, price_minu, return_type ):
     tmp = price_minu[ loc_hour[i]: ]
     tmp_return =[]
     for j in range(1, len(tmp)):
-        tmp_return.append(log(tmp[j]*1.0/(tmp[j-1]+1e-5)+1e-5))
+        
+        if return_type == 'per':
+            tmp_return.append( (tmp[j]-tmp[j-1])/(tmp[j-1]+1e-5)*100 )
+        elif return_type == 'log':
+            tmp_return.append(log(tmp[j]*1.0/(tmp[j-1]+1e-5)+1e-5))
     
     #rvol_hour.append( sqrt(var(tmp_return)) )
     rvol_hour.append( np.std(tmp_return) )
     return_minu+=tmp_return
     
-    #print 'Done'
+    print 'Done'
     
     return return_minu, rvol_hour
 

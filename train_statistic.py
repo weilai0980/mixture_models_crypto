@@ -163,6 +163,12 @@ def roll_prediction_strx( xtr, extr, xts, exts, training_order, bool_add_ex ):
     return xts_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat))))
 
 
+
+def oneshot_prediction_egarch( xtr, extr, xts, exts, training_order, bool_add_ex ):
+    
+    return 'working...'
+
+
 def roll_prediction_egarch( xtr, extr, xts, exts, training_order, bool_add_ex ):
     roll_x = xtr
     roll_ex= extr
@@ -170,12 +176,18 @@ def roll_prediction_egarch( xtr, extr, xts, exts, training_order, bool_add_ex ):
     exdim = len(exts[0])
     xts_hat = []
     
+    #model = pf.EGARCH(returns, p=1, q=1)
+    #x = model.fit()
+    #x.summary()
+    
+    
     for i in range(len(xts)):
         
         tmp_x = roll_x[-training_order:]
         tmp_ex = roll_ex[-training_order:]
         
         print 'test on: ', i 
+        
         
         if bool_add_ex == True:
             

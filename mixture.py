@@ -1385,7 +1385,7 @@ class neural_mixture_lstm():
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
 
 
-# ---- Mixture LSTM log input----
+# ---- Mixture LSTM with log input----
 
 class neural_mixture_lstm_log():
     
