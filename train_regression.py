@@ -53,10 +53,10 @@ ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file +
 '''
 
 # Gaussain process 
-#gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_gp.sav', log_ytrain)
+gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_gp.sav', log_ytrain)
 
 # Lasso 
-lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_lasso.sav', log_ytrain)
+#lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_lasso.sav', log_ytrain)
 
 
 

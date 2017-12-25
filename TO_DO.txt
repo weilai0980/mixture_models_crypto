@@ -1,5 +1,5 @@
 
---- Finished ---
+---- Finished ----
 
 pipeline: feature extraction module, traing-testing data format, training and evalution of models, 
 
@@ -39,40 +39,7 @@ Feature seletion
   Feature selection for high-dimensional data: A fast correlation-based filter solution
   Feature Subset Selection and Feature Ranking for Multivariate Time Series
 
---- To Do ---
-
-Baseline: 
-  moving average and filter,  GARCH
-
-Gaussain process volatility model 
-
-quantile features
-
-Seasonality check 
-  
-  
-Training scheme
-  Rolling and unifed training and testing 
-
-
-
-Regualariation 
-
-Auxililary loss: diversity of experts
-
-
-multi-head attention:  all you need is attention
-
-Model variance reduction:
-  https://stackoverflow.com/questions/45206910/tensorflow-exponential-moving-average
-  https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
-
-QQ plot
-
-
-Tunning gates:
-  bias in _linear function
-  
+GARCH, EGARCH
 
 Feature engineering
   bid-ask spread
@@ -82,49 +49,66 @@ Feature engineering
   price shift
   slope
   
-  Bitcoin - CNY
-  
-
-Mixture: 
-   
-   attention
-   gate constraint, gate stability problem 
-   gate logit activaition from neural network 
-   
-   smooth on expert gate: Learning Factored Representations in a Deep Mixture of Experts
-
-   activation on the last layer
-
-
-GARCH
-
 Structural time series
 
+---- To Do ----
 
-test first, exponetial regression, log normal regression
+Evaluation process:
+   single volatility
+   volatility + order book
+   volatility + feature selection from order book 
+   
+   mixture model 
 
+Training scheme:
+  Rolling and incremental training / testing 
 
-mixture_lstm_generative
-
-Baseline: aggregate to the same grnularity, gaussian process 
-
-
-Sparse & regularization:
+Mixture:
+  hierachical
+  Regualariation 
+  Auxililary loss: diversity of experts
+  Learning Factored Representations in a Deep Mixture of Experts
+  Sparse & regularization:
   Relevance Vector Machines
   Spike and slab 
   L1/L0 norm
+  Auxiliary superision in loss functions
 
-bayesian mixture 
-bayesian rnn
+Baseline:
+  moving average and filter
+  aggregate to the same grnularity, gaussian process 
+  
+Bayesian:
+  mixture regression 
+  temporal mixture regression 
+  
+Gaussain process volatility model 
 
-Parametric Rectified Linear Unit (PReLU)
+Feature engineering:
+  quantile features
+  Seasonality check 
+  Bitcoin - CNY
+  QQ plot
+  correlation matrix
+  
+Model variance reduction:
+  https://stackoverflow.com/questions/45206910/tensorflow-exponential-moving-average
+  https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
+
+Neural Mixture: 
+   attention
+   gate constraint, gate stability problem 
+   gate logit activaition from neural network 
+   smooth on expert gate: Learning Factored Representations in a Deep Mixture of Experts
+   activation on the last layer
+   bias in _linear function
+
+test first, exponetial regression, log normal regression
 
 variance reduction in the estimator for sampling 
 
-Auxiliary superision in loss functions
 
-
---- python math operators ---
+---- python math operators ----
 
 np.subtract.outer
 squeeze
@@ -133,10 +117,7 @@ np.linalg.inv(C).dot(B.T).T.dot(y)
 np.outer(b, a)
 np.add( [tmp1, tmp2] )
 
-
-
 ---- Paper write-up ----
-
 
 Features of volatility series:  no unit root, stocastic trend, local level shift 
 
@@ -156,9 +137,10 @@ One way traders can view order book depth, in addition to the method above, is t
 https://tradeblock.com/blog/bitcoin-trading-interpreting-order-books/
 
 
-
-
 -- Deep learning and attention
+
+multi-head attention:  all you need is attention
+
 
 Outrageously large neural networks the sparsely gated mixture of expert layer
 

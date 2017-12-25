@@ -235,12 +235,20 @@ def training_testing_garch(vol_hour, all_loc_hour, order_hour, train_split_ratio
     return_hour = []
     for i in range(1, len(all_loc_hour)):
         tmp = price_minu[ all_loc_hour[i-1]:all_loc_hour[i] ]
-        
         tmp_return =[]
-        for j in range(1, len(tmp)):
-            tmp_return.append( (tmp[j]-tmp[j-1])/(tmp[j-1]+1e-5)*100 )
+        
+        if len(tmp)==1:
+            return_hour.append(0.0)
+        else:
+            for j in range(1, len(tmp)):
+                tmp_return.append((tmp[j]-tmp[j-1])/(tmp[j-1]+1e-5)*100)
+        
+            return_hour.append( mean(tmp_return) )
+        
+        # check for single return 
+        if np.isnan(return_hour[-1]):
+            print all_loc_hour[i-1], all_loc_hour[i]
             
-        return_hour.append( mean(tmp_return) )
         
     tmp = price_minu[ all_loc_hour[i]: ]
     tmp_return =[]
@@ -363,7 +371,6 @@ def cal_return_volatility_hour( loc_hour, price_minu, return_type ):
         if len(tmp)<=1:
             rvol_hour.append( 0.0 )
             continue
-            #print loc_hour[i-1], loc_hour[i]
         
         tmp_return =[]
         for j in range(1, len(tmp)):
@@ -377,9 +384,7 @@ def cal_return_volatility_hour( loc_hour, price_minu, return_type ):
     
         return_minu += tmp_return    
         rvol_hour.append( np.std(tmp_return) )
-        #rvol_hour.append( sqrt(var(tmp_return)) )
         
-                     
     tmp = price_minu[ loc_hour[i]: ]
     tmp_return =[]
     for j in range(1, len(tmp)):
@@ -389,7 +394,6 @@ def cal_return_volatility_hour( loc_hour, price_minu, return_type ):
         elif return_type == 'log':
             tmp_return.append(log(tmp[j]*1.0/(tmp[j-1]+1e-5)+1e-5))
     
-    #rvol_hour.append( sqrt(var(tmp_return)) )
     rvol_hour.append( np.std(tmp_return) )
     return_minu+=tmp_return
     

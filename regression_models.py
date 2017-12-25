@@ -663,7 +663,7 @@ def gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, tra
     gp.fit(xtrain, ytrain)
     #gp.kernel_, gp.alpha_
     
-    print "\n Begin to evaluate Gaussian process regression"
+    print "Begin to evaluate Gaussian process regression"
     
     pytrain, sigma_train = gp.predict(xtrain, return_std=True)
     pytest,  sigma_test  = gp.predict(xtest, return_std=True)
@@ -674,7 +674,7 @@ def gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, tra
     print "RMSE: ", tmp_tr, tmp_ts
     
     # save best model 
-    joblib.dump(best_model, model_file)
+    joblib.dump(gp, model_file)
     
     # save the overall errors
     with open(result_file, "a") as text_file:

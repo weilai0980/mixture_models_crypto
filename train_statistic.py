@@ -15,13 +15,12 @@ from statsmodels.tsa.stattools import pacf
 from statsmodels.tsa.api import VAR, DynamicVAR
 from statsmodels.stats import diagnostic
 
-# --- model and training log set-up ---
+import pyflux as pf
+
+# ---- model and training log set-up ----
 result_file = "res/reg_v_minu.txt"
 log_file = "res/arima"
 model_file = "model/v_minu"
-
-bool_clf = False
-
 
 def oneshot_prediction_arimax( xtr, extr, xts, exts, training_order, arima_order, bool_add_ex ):
     roll_x = xtr
@@ -84,7 +83,6 @@ def oneshot_prediction_strx( xtr, extr, xts, exts, training_order, bool_add_ex )
     # out-sample forecast, in-sample rmse, out-sample rmse      
     return xts_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat)))), \
 sqrt(mean((xtr - np.asarray(xtr_hat))*(xtr - np.asarray(xtr_hat))))
-
 
 def roll_prediction_arimax( xtr, extr, xts, exts, training_order, arima_order, bool_add_ex, log_file ):
     roll_x = xtr
@@ -162,56 +160,54 @@ def roll_prediction_strx( xtr, extr, xts, exts, training_order, bool_add_ex ):
     # return rooted mse    
     return xts_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat))))
 
+def oneshot_prediction_egarch( return_tr, vol_tr, return_ts, vol_ts, training_order, method ):
+    
+    if method == 'garch1':
+        model = pf.GARCH(return_tr, p=1, q=1)
+        x = model.fit()
+        
+        tr_sigma2, _, ___ = model._model(model.latent_variables.get_z_values())
+        vol_tr_hat = tr_sigma2**0.5
+        
+    elif method == 'egarch1':
+        model = pf.EGARCH(return_tr, p=1, q=1)
+        x = model.fit()
+    
+        tr_sigma2, _, ___ = model._model(model.latent_variables.get_z_values())
+        vol_tr_hat = np.exp(tr_sigma2/2.0)
 
-
-def oneshot_prediction_egarch( xtr, extr, xts, exts, training_order, bool_add_ex ):
+    tmp_pre = np.asarray(model.predict(len(vol_ts)))
+    vol_ts_hat = []
+    for i in tmp_pre:
+        vol_ts_hat.append(i[0])
     
-    return 'working...'
-
-
-def roll_prediction_egarch( xtr, extr, xts, exts, training_order, bool_add_ex ):
-    roll_x = xtr
-    roll_ex= extr
+    return vol_ts_hat, sqrt(mean((vol_ts - np.asarray(vol_ts_hat))*(vol_ts - np.asarray(vol_ts_hat)))), \
+sqrt(mean((vol_tr[1:] - np.asarray(vol_tr_hat))*(vol_tr[1:] - np.asarray(vol_tr_hat))))
     
-    exdim = len(exts[0])
-    xts_hat = []
+def roll_prediction_egarch( return_tr, vol_tr, return_ts, vol_ts, training_order, method ):
     
-    #model = pf.EGARCH(returns, p=1, q=1)
-    #x = model.fit()
-    #x.summary()
+    roll_x = return_tr
+    vol_hat = []
     
-    
-    for i in range(len(xts)):
+    for i in range(len(vol_ts)):
+        
+        print 'now processing', i
         
         tmp_x = roll_x[-training_order:]
-        tmp_ex = roll_ex[-training_order:]
         
-        print 'test on: ', i 
-        
-        
-        if bool_add_ex == True:
+        if method == 'garch':
+            model = pf.GARCH(tmp_x, p=1, q=1)
+            x = model.fit()
             
-            roll_mod = sm.tsa.UnobservedComponents(endog = tmp_x, exog = tmp_ex, level= 'local linear trend', trend = True )
-            
-            fit_res = roll_mod.fit(disp=False)
-            predict = fit_res.get_forecast(1, exog = np.reshape(exts[i], [1, exdim]))
-            predict_ci = predict.conf_int()
-            
-        else:
-            roll_mod = sm.tsa.UnobservedComponents(endog = tmp_x, level= 'local linear trend', trend = True )
-            
-            fit_res = roll_mod.fit(disp=False)
-            predict = fit_res.get_forecast(1)
-            predict_ci = predict.conf_int()
-            
-        xts_hat.append(predict.predicted_mean)
-        
-        roll_x  = np.concatenate( (roll_x,   xts[i:i+1]) )
-        roll_ex = np.concatenate( (roll_ex, exts[i:i+1]) )
+        elif method == 'egarch':
+            model = pf.EGARCH(tmp_x, p=1, q=1)
+            x = model.fit()
+           
+        vol_hat.append(np.asarray(model.predict(1))[0][0])
+        roll_x = np.concatenate((roll_x, return_ts[i:i+1]))
         
     # return rooted mse    
-    return xts_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat))))
-
+    return vol_hat, sqrt(mean((vol_ts - np.asarray(vol_hat))*(vol_ts - np.asarray(vol_hat))))
 
 # ---- main process ----
 
@@ -222,14 +218,16 @@ run_mode = str(sys.argv[2])
 
 if run_mode == 'local':
     
-    if method == 'garch':
+    if method in ['garch', 'garch1', 'egarch', 'egarch1'] :
         
         # --- Load pre-processed training and testing data ---
         file_postfix = "garch"
-        vol_train = np.load("../dataset/bitcoin/training_data/voltrain_"+file_postfix+".dat")
+        xtrain = np.load("../dataset/bitcoin/training_data/voltrain_"+file_postfix+".dat")
         rt_train  = np.load("../dataset/bitcoin/training_data/rttrain_" +file_postfix+".dat")
-        vol_test = np.load("../dataset/bitcoin/training_data/voltest_"+file_postfix+".dat")
+        xtest = np.load("../dataset/bitcoin/training_data/voltest_"+file_postfix+".dat")
         rt_test  = np.load("../dataset/bitcoin/training_data/rttest_" +file_postfix+".dat")
+        
+        print np.shape(xtrain), np.shape(rt_train), np.shape(xtest), np.shape(rt_test)
         
     else:
         # --- Load pre-processed training and testing data ---
@@ -238,6 +236,8 @@ if run_mode == 'local':
         extrain  = np.load("../dataset/bitcoin/training_data/extrain_" +file_postfix+".dat")
         xtest = np.load("../dataset/bitcoin/training_data/xtest_"+file_postfix+".dat")
         extest  = np.load("../dataset/bitcoin/training_data/extest_" +file_postfix+".dat")
+        
+        print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
     
 elif run_mode == 'server':
     
@@ -248,9 +248,9 @@ elif run_mode == 'server':
     xtest = np.load("../dataset/bk/xtest_"+file_postfix+".dat")
     extest  = np.load("../dataset/bk/extest_" +file_postfix+".dat")
 
-print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
+    print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
 
-
+# only rolling methods ouput both training and testing errors
 if method == 'arima':
     log_file = log_file +'.txt'
     
@@ -287,20 +287,28 @@ elif method == 'str1':
 elif method == 'strx1':
     yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, 1026, True )
     
-elif method == 'garch':
+elif method == 'garch1' or method == 'egarch1' :
     
-    print 'working...'
+    print 'using one-shot garch model: '
+    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_egarch( rt_train, xtrain, rt_test, xtest, 1000, method )
+
+elif method == 'garch' or method == 'egarch':
+    
+    print 'using garch model: '
+    yhat_ts, rmse = roll_prediction_egarch( rt_train, xtrain, rt_test, xtest, 1000, method )
+    
     
 # ---- record traning and testing errors ----    
 
 np.savetxt("res/pytest_" + method + ".txt", zip(xtest, yhat_ts), delimiter=',')
 
-if method in ['arima', 'arimax', 'str', 'strx']:
+if method in ['arima', 'arimax', 'str', 'strx', 'garch', 'egarch']:
     
     print 'RMSE : ', rmse
     
     with open(result_file, "a") as text_file:
         text_file.write( "%s : %f  \n"%(method, rmse) ) 
+        
 else:
     
     print 'RMSE : ', tr_rmse, ts_rmse
