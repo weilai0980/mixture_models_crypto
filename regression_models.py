@@ -373,27 +373,33 @@ def xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, num_class, result
                     [0.0001, 0.001, 0.01, 0.1, 1, 10, 100], bool_clf, num_class)
     print " l2, RMSE:", train_err1, l2_err
 
+    
+    # specific for XGBoosted
+    xg_test  = xgb.DMatrix(xtest,  label = ytest)
+    xg_train = xgb.DMatrix(xtrain, label = ytrain)
+    
     # save best model and the testing results
     if utils_result_comparison(n_depth_err[2], l2_err[1], bool_clf):
+        
         joblib.dump(model0, model_file)
         
         # save testing resutls under the best model
-        py = model0.predict( xtest )
+        py = model0.predict( xg_test )
         np.savetxt("res/pytest_xgt.txt", zip(py, ytest), delimiter=',')
         
         # save training resutls under the best model
-        py = model0.predict( xtrain )
+        py = model0.predict( xg_train )
         np.savetxt("res/pytrain_xgt.txt", zip(py, ytrain), delimiter=',')
         
     else:
         joblib.dump(model1, model_file)
         
         # save testing resutls under the best model
-        py = model1.predict( xtest )
+        py = model1.predict( xg_test )
         np.savetxt("res/pytest_xgt.txt", zip(py, ytest), delimiter=',')
         
         # save training resutls under the best model
-        py = model1.predict( xtrain )
+        py = model1.predict( xg_train )
         np.savetxt("res/pytrain_xgt.txt", zip(py, ytrain), delimiter=',')
     
     # save overall errors
@@ -636,7 +642,7 @@ def ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_fi
     
     # save the overall errors
     with open(result_file, "a") as text_file:
-        text_file.write( "Ridge regression: %f, %f, %f \n"%(min(tmp_err, key = lambda x:x[1])[0], tmp_tr, tmp_ts) )
+        text_file.write( "Ridge regression: %f, %f, %f \n"%(min(tmp_err, key = lambda x:x[1])[0], tmp_tr, best_err) )
     
     # save testing resutls under the best model
     py = best_model.predict( xtest )

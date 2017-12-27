@@ -79,8 +79,7 @@ def plain_dense( x, x_dim, dim_layers, scope, dropout_keep_prob):
     
     with tf.variable_scope(scope):
         # initilization
-        w = tf.get_variable('w', [x_dim, dim_layers[0]], dtype=tf.float32,\
-                                    initializer=tf.contrib.layers.xavier_initializer())
+        w = tf.get_variable('w', [x_dim, dim_layers[0]], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
         b = tf.Variable(tf.zeros([dim_layers[0]]))
         h = tf.nn.relu( tf.matmul(x, w) + b )
 
@@ -91,8 +90,8 @@ def plain_dense( x, x_dim, dim_layers, scope, dropout_keep_prob):
         
     for i in range(1, len(dim_layers)):
         with tf.variable_scope(scope+str(i)):
-            w = tf.get_variable('w', [dim_layers[i-1], dim_layers[i]],initializer=tf.contrib.layers.xavier_initializer())
-            b = tf.Variable(tf.zeros( dim_layers[i] ))
+            w = tf.get_variable('w', [dim_layers[i-1], dim_layers[i]], initializer=tf.contrib.layers.xavier_initializer())
+            b = tf.Variable(tf.zeros( dim_layers[i]))
             h = tf.nn.relu( tf.matmul(h, w) + b )
                 
             regularization += tf.nn.l2_loss(w)
@@ -119,22 +118,22 @@ class mixture_linear_lk():
         self.is_log = is_log
         
         # initialize placeholders
-        self.v_pre = tf.placeholder(tf.float32, [None, order_v])
+        self.v_auto = tf.placeholder(tf.float32, [None, order_v])
         self.distr = tf.placeholder(tf.float32, [None, order_distr])
         self.y     = tf.placeholder(tf.float32, [None, ])
         
         self.keep_prob = tf.placeholder(tf.float32)
 
         # models on individual feature groups
-        pre_v, regular_v     = linear_predict(self.v_pre, order_v, 'v_pre' )
-        pre_distr, regular_distr = linear_predict(self.distr, order_distr, 'distr')
+        pre_v, regu_v = linear_predict(self.v_auto, order_v, 'v_auto', True)
+        pre_distr, regu_d = linear_predict(self.distr, order_distr, 'distr', True)
 
         # concatenate individual means 
         pre = tf.stack( [pre_v, pre_distr], 1 )
         
         # variance depedent on features 
-        varv, regu_vv =   linear(self.v_pre, order_v,   'sig_v')
-        vardistr, regu_vd =linear(self.distr, order_distr,'sig_distr')
+        varv, regu_v_var = linear(self.v_auto, order_v, 'sig_v', True)
+        vardistr, regu_d_var = linear(self.distr, order_distr, 'sig_distr', True)
 
         # variance constant for each expert
         #varv =    tf.Variable(tf.random_normal([1,], stddev = math.sqrt(2.0/float(1.0))) )
@@ -154,40 +153,40 @@ class mixture_linear_lk():
         '''
         #--- gate based on volatility features ---
         '''
-        logit_c, regu_c = linear( self.v_pre, order_v, 'logit_c' )
+        logit_c, regu_c = linear( self.v_auto, order_v, 'logit_c' )
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
         self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
         '''
         #--- gate based on concatenated logistic ---
         '''
-        concat_x = tf.concat( [self.v_pre, self.distr], 1 ) 
+        concat_x = tf.concat( [self.v_auto, self.distr], 1 ) 
         logit_c, regu_c = linear( concat_x, order_v+order_distr , 'logit_c' )
         
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
         self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
         '''
         #--- gate based on multimodal distribution ---        
-        logit_v, regu_v = linear(self.v_pre, order_v,    'gate_v' )
-        logit_distr, regu_d = linear(self.distr, order_distr, 'gate_distr')
+        logit_v, regu_v_gate = linear(self.v_auto, order_v, 'gate_v', True)
+        logit_distr, regu_d_gate = linear(self.distr, order_distr, 'gate_distr', True)
         self.logit = tf.squeeze( tf.stack( [logit_v, logit_distr], 1 ) )
         self.gates = tf.nn.softmax(self.logit)
         
-        #negative log likelihood of normal 
-        
-        # variance constant
+        # constant variance
         #tmpllk_v = tf.exp(-0.5*tf.square(self.y- (pre_v)))/(2.0*np.pi)**0.5
         #tmpllk_distr = tf.exp(-0.5*tf.square(self.y-(pre_distr)))/(2.0*np.pi)**0.5
         
-        # with variance variable 
-        tmpllk_v = tf.exp(-0.5*tf.square(self.y- (pre_v))/(var_v**2+1e-5))/(2.0*np.pi*(var_v**2+1e-5))**0.5
-        tmpllk_distr = tf.exp(-0.5*tf.square(self.y-(pre_distr))/(var_distr**2+1e-5))/(2.0*np.pi*(var_distr**2+1e-5))**0.5
+        # heteroskedastic
+        # ?
+        tmpllk_v = tf.exp(-0.5*tf.square(self.y- (pre_v))/(var_v+1e-5))/(2.0*np.pi*(var_v+1e-5))**0.5
+        tmpllk_distr = tf.exp(-0.5*tf.square(self.y-(pre_distr))/(var_distr+1e-5))/(2.0*np.pi*(var_distr+1e-5))**0.5
         
+        # negative log likelihood of normal 
         llk = tf.multiply( (tf.stack([tmpllk_v, tmpllk_distr], 1)), self.gates ) 
         self.neg_logllk = tf.reduce_sum( -1.0*tf.log( tf.reduce_sum(llk, 1)+1e-5 ) )
         
         # regularization
-        self.regu = 0.0001*(regular_v + regular_distr) + 0.000001*(regu_v + regu_d) 
-        #+ 0.01*(regu_vv + regu_vd)
+        self.regu = 0.0001*(regu_v + regu_d) + 0.000001*(regu_v_gate + regu_d_gate) + \
+                    0.001*(regu_v_var + regu_v_var)
         
         # prediction
         if is_log == True:
@@ -218,29 +217,29 @@ class mixture_linear_lk():
         
         # !
         _, c = self.sess.run([self.optimizer, self.lk_loss],\
-                             feed_dict={self.v_pre:v_train, \
+                             feed_dict={self.v_auto:v_train, \
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return c
     
     #   infer givn testing data
     def inference(self, v_test, distr_test, y_test, keep_prob):
         
-        return self.sess.run([self.err, self.regu], feed_dict = {self.v_pre:v_test, \
+        return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test, \
                                                       self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     
     #   predict givn testing data
     def predict(self, v_test, distr_test, keep_prob):
         
-        return self.sess.run( self.y_hat, feed_dict = {self.v_pre:v_test,  \
+        return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test,  \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     
      #   predict givn testing data
     def predict_gates(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_pre:v_test,  \
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,  \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     def predict_logit(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_pre:v_test,  \
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,  \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
 
 # ---- Mixture Linear optimize squared error ----
@@ -264,14 +263,14 @@ class mixture_linear_sq():
         self.is_log = is_log
         
         # initialize placeholders
-        self.v_pre = tf.placeholder(tf.float32, [None, order_v])
+        self.v_auto = tf.placeholder(tf.float32, [None, order_v])
         self.distr = tf.placeholder(tf.float32, [None, order_distr])
         self.y     = tf.placeholder(tf.float32, [None, ])
         
         self.keep_prob = tf.placeholder(tf.float32)
 
         # models on individual feature groups
-        pre_v, regular_v     = linear_predict(self.v_pre, order_v, 'v_pre' )
+        pre_v, regular_v     = linear_predict(self.v_auto, order_v, 'v_auto' )
         pre_distr, regular_distr = linear_predict(self.distr, order_distr, 'distr')
 
         # concatenate individual means 
@@ -285,20 +284,20 @@ class mixture_linear_sq():
         '''
         #--- gate based on volatility features ---
         '''
-        logit_c, regu_c = linear( self.v_pre, order_v, 'logit_c' )
+        logit_c, regu_c = linear( self.v_auto, order_v, 'logit_c' )
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
         self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
         '''
         #--- gate based on concatenated logistic ---
         '''
-        concat_x = tf.concat( [self.v_pre, self.distr], 1 ) 
+        concat_x = tf.concat( [self.v_auto, self.distr], 1 ) 
         logit_c, regu_c = linear( concat_x, order_v+order_distr , 'logit_c' )
         
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
         self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
         '''
         #--- gate based on multimodal distribution ---        
-        logit_v, regu_v = linear(self.v_pre, order_v,         'gate_v' )
+        logit_v, regu_v = linear(self.v_auto, order_v,         'gate_v' )
         logit_distr, regu_d = linear(self.distr, order_distr, 'gate_distr')
         self.logit = tf.squeeze( tf.stack( [logit_v, logit_distr], 1 ) )
         self.gates = tf.nn.softmax(self.logit)
@@ -341,7 +340,7 @@ class mixture_linear_sq():
         
         # !
         _,c = self.sess.run([self.optimizer, self.loss],\
-                             feed_dict={self.v_pre:v_train, \
+                             feed_dict={self.v_auto:v_train, \
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return c
     
@@ -351,29 +350,29 @@ class mixture_linear_sq():
         
         if self.is_log == True:
             self.log_err = tf.reduce_mean((self.y - self.y_hat_exp)*(self.y - self.y_hat_exp))        
-            return self.sess.run([self.log_err, self.regu], feed_dict = {self.v_pre:v_test,  \
+            return self.sess.run([self.log_err, self.regu], feed_dict = {self.v_auto:v_test,  \
                                                       self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
         else:
-            return self.sess.run([self.err, self.regu], feed_dict = {self.v_pre:v_test,   \
+            return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test,   \
                                                       self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     
     #   predict givn testing data
     def predict(self, v_test, distr_test, keep_prob):
         
         if self.is_log == True:
-            return self.sess.run( self.y_hat_exp, feed_dict = {self.v_pre:v_test,    \
+            return self.sess.run( self.y_hat_exp, feed_dict = {self.v_auto:v_test,    \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
         else:
-            return self.sess.run( self.y_hat, feed_dict = {self.v_pre:v_test,   \
+            return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test,   \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     
     #   predict givn testing data
     def predict_gates(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_pre:v_test,    \
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,    \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     def predict_logit(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_pre:v_test,    \
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,    \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
 
 # ---- Mixture Linear Log-normal distribution----
@@ -394,22 +393,26 @@ class mixture_linear_lognorm_lk():
         self.sess = session
         
         # initialize placeholders
-        self.v_pre = tf.placeholder(tf.float32, [None, order_v])
+        self.v_auto = tf.placeholder(tf.float32, [None, order_v])
         self.distr = tf.placeholder(tf.float32, [None, order_distr])
         self.y     = tf.placeholder(tf.float32, [None, ])
         
         self.keep_prob = tf.placeholder(tf.float32)
-
+        
+        # -- prediction of individual models 
+        
         # models on individual feature groups
-        pre_v, regular_v     = linear_predict(self.v_pre, order_v, 'v_pre', True )
-        pre_distr, regular_distr = linear_predict(self.distr, order_distr, 'distr', True)
+        pre_v, regu_v     = linear_predict(self.v_auto, order_v, 'v_auto', True )
+        pre_distr, regu_d = linear_predict(self.distr, order_distr, 'distr', True)
 
         # concatenate individual means 
         pre = tf.stack( [pre_v, pre_distr], 1 )
         
+        # -- variance
+        
         # variance depedent on features 
-        varv, regu_vv =   linear(self.v_pre, order_v,   'sig_v', True)
-        vardistr, regu_vd =linear(self.distr, order_distr,'sig_distr', True)
+        varv, regu_v_var =   linear(self.v_auto, order_v,   'sig_v', True)
+        vardistr, regu_d_var =linear(self.distr, order_distr,'sig_distr', True)
 
         # variance constant for each expert
         #varv =    tf.Variable(tf.random_normal([1,], stddev = math.sqrt(2.0/float(1.0))) )
@@ -421,33 +424,35 @@ class mixture_linear_lognorm_lk():
         var_v = tf.square(varv)
         var_distr = tf.square(vardistr)
         
-        #--- gate based on order book --- 
+        # -- mixture gate 
+        
+        # gate based on order book 
         '''
         logit_c, regu_c = linear( self.distr, order_distr , 'logit_c' )
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
         self.gates = tf.stack( [1.0-tmp_gate, tmp_gate],1 )
         '''
-        #--- gate based on volatility features ---
+        # gate based on volatility features
         '''
-        logit_c, regu_c = linear( self.v_pre, order_v, 'logit_c' )
+        logit_c, regu_c = linear( self.v_auto, order_v, 'logit_c' )
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
         self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
         '''
-        #--- gate based on concatenated logistic ---
+        # gate based on concatenated logistic
         '''
-        concat_x = tf.concat( [self.v_pre, self.distr], 1 ) 
+        concat_x = tf.concat( [self.v_auto, self.distr], 1 ) 
         logit_c, regu_c = linear( concat_x, order_v+order_distr , 'logit_c' )
         
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
         self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
         '''
-        #--- gate based on multimodal distribution ---        
-        logit_v, regu_v = linear(self.v_pre, order_v,    'gate_v', True )
-        logit_distr, regu_d = linear(self.distr, order_distr, 'gate_distr', True)
+        # gate based on multimodal distribution        
+        logit_v, regu_v_weight = linear(self.v_auto, order_v,    'gate_v', True )
+        logit_distr, regu_d_weight = linear(self.distr, order_distr, 'gate_distr', True)
         self.logit = tf.squeeze( tf.stack( [logit_v, logit_distr], 1 ) )
         self.gates = tf.nn.softmax(self.logit)
         
-        # negative log likelihood of log normal 
+        # -- negative log likelihood of log normal 
         
         # variance constant
         #tmpllk_v = tf.exp(-0.5*tf.square(tf.log(self.y+1e-5)-pre_v))/(2.0*np.pi)**0.5/(self.y+1e-5)
@@ -460,14 +465,16 @@ class mixture_linear_lognorm_lk():
         llk = tf.multiply( (tf.stack([tmpllk_v, tmpllk_distr], 1)), self.gates ) 
         self.neg_logllk = tf.reduce_sum( -1.0*tf.log(tf.reduce_sum(llk, 1)+1e-5) )
         
+        # -- prediction and errors
+        
         # mixed expectation of log normal
         self.y_hat = tf.reduce_sum(tf.multiply(tf.exp(pre), self.gates), 1)
         
         # prediction errors
         self.err = tf.losses.mean_squared_error( self.y, self.y_hat )
         
-        # regularization
-        self.regu =  0.0001*(regu_v + regu_d)+ 0.001*(regular_v + regular_distr) + 0.001*(regu_vv + regu_vd)
+        # -- regularization
+        self.regu =  0.0001*(regu_v + regu_d)+ 0.001*(regu_v_var + regu_d_var) + 0.001*(regu_v_weight + regu_v_weight)
         
     def model_reset(self):
         self.init = tf.global_variables_initializer()
@@ -490,7 +497,7 @@ class mixture_linear_lognorm_lk():
         
         # !
         _, c = self.sess.run([self.optimizer, self.lk_loss],\
-                             feed_dict={self.v_pre:v_train,\
+                             feed_dict={self.v_auto:v_train,\
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return c
     
@@ -498,23 +505,24 @@ class mixture_linear_lognorm_lk():
     #   infer givn testing data
     def inference(self, v_test, distr_test, y_test, keep_prob):
         
-        return self.sess.run([self.err, self.regu], feed_dict = {self.v_pre:v_test, \
+        return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test, \
                                                       self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     
     #   predict givn testing data
     def predict(self, v_test, distr_test, keep_prob):
         
-        return self.sess.run( self.y_hat, feed_dict = {self.v_pre:v_test,  \
+        return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test,  \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     
      #   predict givn testing data
     def predict_gates(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_pre:v_test,   \
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,   \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     def predict_logit(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_pre:v_test,   \
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,   \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
+    
     
 # ---- Mixture Linear Exponential distribution ----
 class mixture_linear_exp():
@@ -533,14 +541,14 @@ class mixture_linear_exp():
         self.sess = session
         
         # initialize placeholders
-        self.v_pre = tf.placeholder(tf.float32, [None, order_v])
+        self.v_auto = tf.placeholder(tf.float32, [None, order_v])
         self.distr = tf.placeholder(tf.float32, [None, order_distr])
         self.y     = tf.placeholder(tf.float32, [None, ])
         
         self.keep_prob = tf.placeholder(tf.float32)
 
         # models on individual feature groups
-        pre_v, regular_v     = linear_predict(self.v_pre, order_v, 'v_pre' )
+        pre_v, regular_v     = linear_predict(self.v_auto, order_v, 'v_auto' )
         pre_distr, regular_distr = linear_predict(self.distr, order_distr, 'distr')
 
         # concatenate individual
@@ -556,13 +564,13 @@ class mixture_linear_exp():
         '''
         #--- gate based on volatility features ---
         '''
-        logit_c, regu_c = linear( self.v_pre, order_v, 'logit_c' )
+        logit_c, regu_c = linear( self.v_auto, order_v, 'logit_c' )
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
         self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
         '''
         #--- gate based on concatenated logistic ---
         '''
-        concat_x = tf.concat( [self.v_pre, self.distr], 1 ) 
+        concat_x = tf.concat( [self.v_auto, self.distr], 1 ) 
         logit_c, regu_c = linear( concat_x, order_v+order_distr , 'logit_c' )
         
         tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
@@ -570,7 +578,7 @@ class mixture_linear_exp():
         '''
         #--- gate based on multimodal distribution ---        
         
-        logit_v, regu_v = linear(self.v_pre, order_v,    'gate_v' )
+        logit_v, regu_v = linear(self.v_auto, order_v,    'gate_v' )
         logit_distr, regu_d = linear(self.distr, order_distr, 'gate_distr')
         self.logit = tf.squeeze( tf.stack( [logit_v, logit_distr], 1 ) )
         self.gates = tf.nn.softmax(self.logit)
@@ -593,7 +601,7 @@ class mixture_linear_exp():
     def test_func(self, v_train, distr_train, y_train ):
         
         res = self.sess.run([self.test],\
-                             feed_dict={self.v_pre:v_train,\
+                             feed_dict={self.v_auto:v_train,\
                                         self.distr:distr_train, self.y:y_train })
         return res
     
@@ -625,26 +633,26 @@ class mixture_linear_exp():
         
         # !
         _,c = self.sess.run([self.optimizer, self.lk_loss],\
-                             feed_dict={self.v_pre:v_train,\
+                             feed_dict={self.v_auto:v_train,\
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return c
     
     #   infer givn testing data
     def inference(self, v_test, distr_test, y_test, keep_prob):
-        return self.sess.run([self.err, self.regu], feed_dict = {self.v_pre:v_test, \
+        return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test, \
                                                       self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     #   predict givn testing data
     def predict(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.y_hat, feed_dict = {self.v_pre:v_test, \
+        return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test, \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     
      #   predict givn testing data
     def predict_gates(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_pre:v_test,  \
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,  \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     def predict_logit(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_pre:v_test, \
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test, \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     
@@ -708,7 +716,7 @@ class neural_mixture_dense():
         self.sess = session
         
         # initialize placeholders
-        self.v_pre = tf.placeholder(tf.float32, [None, order_v])
+        self.v_auto = tf.placeholder(tf.float32, [None, order_v])
         self.req   = tf.placeholder(tf.float32, [None, order_req])
         self.distr = tf.placeholder(tf.float32, [None, order_distr])
         self.y     = tf.placeholder(tf.float32, [None, ])
@@ -716,7 +724,7 @@ class neural_mixture_dense():
         self.keep_prob = tf.placeholder(tf.float32)
         
         # models on individual feature groups
-        pre_v, h_v, regular_v = self.dense_layers(self.HIDDEN_DIMS[0], self.v_pre, order_v, 1, 'v_pre', self.keep_prob )
+        pre_v, h_v, regular_v = self.dense_layers(self.HIDDEN_DIMS[0], self.v_auto, order_v, 1, 'v_auto', self.keep_prob )
         pre_req, h_req, regular_req = self.dense_layers(self.HIDDEN_DIMS[1], self.req, order_req, 1, 'req',self.keep_prob )
         pre_distr, h_distr, regular_distr = self.dense_layers(self.HIDDEN_DIMS[2], self.distr, order_distr, 1,\
                                                               'distr', self.keep_prob )
@@ -729,16 +737,16 @@ class neural_mixture_dense():
         pre = tf.squeeze( pre )  
         
         # explicit feature + hidden feature
-        #hf_v = tf.concat([ self.v_pre, h_v ],1 )
+        #hf_v = tf.concat([ self.v_auto, h_v ],1 )
         #hf_r = tf.concat([ self.req,   h_req ],1 )
         #hf_d = tf.concat([ self.distr, h_distr ],1 )
         
-        hf_v = self.v_pre
+        hf_v = self.v_auto
         #hf_r = self.req
         hf_d = self.distr
         
         
-        concat_x = tf.concat( [self.v_pre, self.distr], 1 )
+        concat_x = tf.concat( [self.v_auto, self.distr], 1 )
         concat_dim = order_v + order_distr
         
         concat_mix_para, concat_h, regu = self.dense_layers( self.HIDDEN_DIMS[3], concat_x, concat_dim, 4, 'gate',\
@@ -781,7 +789,7 @@ class neural_mixture_dense():
     
     def test(self, v_train, req_train, distr_train, y_train, keep_prob ):
         res = self.sess.run([self.test1, self.test2 ],\
-                             feed_dict={self.v_pre:v_train, self.req:req_train,\
+                             feed_dict={self.v_auto:v_train, self.req:req_train,\
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return res
     
@@ -809,7 +817,7 @@ class neural_mixture_dense():
         
         # !
         _,c = self.sess.run([self.optimizer, self.loss],\
-                             feed_dict={self.v_pre:v_train, self.req:req_train,\
+                             feed_dict={self.v_auto:v_train, self.req:req_train,\
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return c
     
@@ -817,20 +825,20 @@ class neural_mixture_dense():
     #   infer givn testing data
     def inference(self, v_test, req_test, distr_test, y_test, keep_prob):
         
-        return self.sess.run([self.err, self.weight_regu],feed_dict = {self.v_pre:v_test,      self.req:req_test,\
+        return self.sess.run([self.err, self.weight_regu],feed_dict = {self.v_auto:v_test,      self.req:req_test,\
                                                       self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     #   predict givn testing data
     def predict(self, v_test, req_test, distr_test, keep_prob):
-        return self.sess.run( self.y_hat, feed_dict = {self.v_pre:v_test,      self.req:req_test,\
+        return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test,      self.req:req_test,\
     
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     #   predict givn testing data
     def predict_gates(self, v_test, req_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_pre:v_test,      self.req:req_test,\
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,      self.req:req_test,\
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     def predict_logit(self, v_test, req_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_pre:v_test,      self.req:req_test,\
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,      self.req:req_test,\
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
 # ---- Plain MLP consuming concatenated features ----    
@@ -1247,7 +1255,7 @@ class neural_mixture_lstm():
         self.loss_type = loss_type
         
         # initialize placeholders
-        self.v_pre = tf.placeholder(tf.float32, [None, steps[0], dims[0]])
+        self.v_auto = tf.placeholder(tf.float32, [None, steps[0], dims[0]])
         self.distr = tf.placeholder(tf.float32, [None, steps[1], dims[1]])
         self.y     = tf.placeholder(tf.float32, [None, ])
         self.keep_prob = tf.placeholder(tf.float32)
@@ -1256,7 +1264,7 @@ class neural_mixture_lstm():
         
         # hidden states on individual lstm
         # layer normalzation lstm: ln_lstm_stacked
-        h_v = lstm_stacked( self.v_pre, lstm_dims[0], 'v_pre' )
+        h_v = lstm_stacked( self.v_auto, lstm_dims[0], 'v_auto' )
         h_d = lstm_stacked( self.distr, lstm_dims[1], 'distr' )
         
         # context hidden states
@@ -1361,7 +1369,7 @@ class neural_mixture_lstm():
         
         # !
         _,c = self.sess.run([self.optimizer, self.loss],\
-                             feed_dict={self.v_pre:v_train,\
+                             feed_dict={self.v_auto:v_train,\
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return c
     
@@ -1369,19 +1377,19 @@ class neural_mixture_lstm():
     #   infer givn testing data
     def inference(self, v_test, distr_test, y_test, keep_prob):
         
-        return self.sess.run([self.err, self.L2*self.regu], feed_dict = {self.v_pre:v_test, \
+        return self.sess.run([self.err, self.L2*self.regu], feed_dict = {self.v_auto:v_test, \
                                                       self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     #   predict givn testing data
     def predict(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.y_hat, feed_dict = {self.v_pre:v_test, \
+        return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test, \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     #   predict givn testing data
     def predict_gates(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_pre:v_test,\
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,\
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     def predict_logit(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_pre:v_test,  \
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,  \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
 
 
@@ -1401,13 +1409,13 @@ class neural_mixture_lstm_log():
         self.loss_type = loss_type
         
         # initialize placeholders
-        self.v_pre = tf.placeholder(tf.float32, [None, steps[0], dims[0]])
+        self.v_auto = tf.placeholder(tf.float32, [None, steps[0], dims[0]])
         self.distr = tf.placeholder(tf.float32, [None, steps[2], dims[2]])
         self.y     = tf.placeholder(tf.float32, [None, ])
         self.keep_prob = tf.placeholder(tf.float32)
         
         # hidden states on individual lstm
-        h_v = ln_lstm_stacked( self.v_pre, lstm_dims[0], 'v_pre' )
+        h_v = ln_lstm_stacked( self.v_auto, lstm_dims[0], 'v_auto' )
         h_d = ln_lstm_stacked( self.distr, lstm_dims[1], 'distr' )
         
         # context hidden states
@@ -1470,7 +1478,7 @@ class neural_mixture_lstm_log():
     
     def test(self, v_train, distr_train, y_train, keep_prob ):
         res = self.sess.run([self.test1, self.test2 ],\
-                             feed_dict={self.v_pre:v_train,\
+                             feed_dict={self.v_auto:v_train,\
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return res
     
@@ -1500,7 +1508,7 @@ class neural_mixture_lstm_log():
         
         # !
         _,c = self.sess.run([self.optimizer, self.loss],\
-                             feed_dict={self.v_pre:v_train,\
+                             feed_dict={self.v_auto:v_train,\
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return c
     
@@ -1517,17 +1525,17 @@ class neural_mixture_lstm_log():
         elif self.loss_type == 'sq':
             self.err = tf.reduce_mean((self.y - self.y_hat_sq)*(self.y - self.y_hat_sq)) 
         
-        return self.sess.run([self.err, self.regu], feed_dict = {self.v_pre:v_test, \
+        return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test, \
                                                       self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     #   predict givn testing data
     def predict(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.y_hat, feed_dict = {self.v_pre:v_test, \
+        return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test, \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     #   predict givn testing data
     def predict_gates(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_pre:v_test,\
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,\
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     def predict_logit(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_pre:v_test,  \
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,  \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })

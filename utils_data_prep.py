@@ -81,45 +81,39 @@ def plot_features( test_ask, test_bid ):
 
 # --- prepare training and testing data ---
 
-def training_testing_statistic(features_minu, vol_hour, all_loc_hour, \
-                                  order_minu, order_hour, train_split_ratio):
+def training_testing_statistic(features_minu, vol_hour, all_loc_hour, order_minu, order_hour, \
+                               train_split_ratio, bool_feature_selection):
     tmpcnt = len(vol_hour)
     ex = []
+    var_explained = []
     
     for i in range(1, tmpcnt):
+        
         if len(features_minu)!=0:
             
-            tmp_minu_idx = all_loc_hour[i] 
+            tmp_minu_idx = all_loc_hour[i]
+            
             if tmp_minu_idx - order_minu < 0:
                 print "Order_minute ?"
-            ex.append( np.asarray(features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]).flatten() )
+            
+            if bool_feature_selection == True:
+                
+                tmpfeatures = features_minu[tmp_minu_idx - order_minu : tmp_minu_idx]
+                tmpft, tmpvar = selection_on_minute_features( tmpfeatures.flatten() )
+                var_explained.append( tmpvar )
+                
+                ex.append( tmpft )
+            
+            else:
+                ex.append( np.asarray(features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]).flatten() )
         
     tmp_split = int(train_split_ratio*(tmpcnt-order_hour-1)) + order_hour
             
     # xtrain, extrain, xtest, extest
     return vol_hour[1:tmp_split+1], ex[:tmp_split], vol_hour[tmp_split+1:], ex[tmp_split:]
 
-'''
-def training_testing_statistic(features_minu, vol_hour, all_loc_hour, \
-                                  order_minu, order_hour, train_split_ratio):
-    tmpcnt = len(vol_hour)
-    ex = []
-    
-    for i in range(tmpcnt):
-        if len(features_minu)!=0:
-            
-            tmp_minu_idx = all_loc_hour[i] 
-            if tmp_minu_idx - order_minu < 0:
-                print "Order_minute ?"
-            ex.append( np.asarray(features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]).flatten() )
-        
-    tmp_split = int(train_split_ratio*(tmpcnt-order_hour)) + order_hour
-            
-    # xtrain, extrain, xtest, extest
-    return vol_hour[:tmp_split], ex[:tmp_split], vol_hour[tmp_split:], ex[tmp_split:] 
-'''
 
-# feature gropus: auto regressive volatility,  order book 
+# feature gropus: auto-regressive volatility,  order book 
 
 def selection_on_minute_features(x):
     
@@ -127,7 +121,7 @@ def selection_on_minute_features(x):
     ipca.fit(x)
     return ipca.transform(x), sum(ipca.explained_variance_ratio_)
 
-def prepare_feature_target(features_minu, req_minu, vol_hour, all_loc_hour, \
+def prepare_feature_target(features_minu, vol_hour, all_loc_hour, \
                            order_minu, order_hour, bool_feature_selection):
     
     tmpcnt = len(vol_hour)
@@ -141,18 +135,11 @@ def prepare_feature_target(features_minu, req_minu, vol_hour, all_loc_hour, \
         
         x.append( [vol_hour[i-order_hour:i]] )
         
-        if len(req_minu)!=0:
-            tmp_minu_idx = all_loc_hour[i] 
-            if tmp_minu_idx - order_minu < 0:
-                print "Order_minute ?"
-            x[-1].append( req_minu[tmp_minu_idx-order_minu : tmp_minu_idx] )
-
         if len(features_minu)!=0:
             
             tmp_minu_idx = all_loc_hour[i] 
             if tmp_minu_idx - order_minu < 0:
                 print "Order_minute ?"
-            
             
             if bool_feature_selection == True:
                 
@@ -164,21 +151,6 @@ def prepare_feature_target(features_minu, req_minu, vol_hour, all_loc_hour, \
                 
             else:
                 x[-1].append( features_minu[tmp_minu_idx-order_minu : tmp_minu_idx] )
-            
-            '''
-            x[-1].append([])
-            tmp_pt = tmp_minu_idx
-            tmp_cnt = 0
-            
-            while tmp_pt>=0:
-                
-                if features_minu[tmp_pt][-1]>1 and features_minu[tmp_pt][-2]>1:
-                    x[-1][-1].append( [features_minu[tmp_pt]] )
-                    tmp_cnt += 1
-                if tmp_cnt >= order_minu:
-                    break
-                tmp_pt -= 1
-            '''    
     
     return x,y, var_explained
 
@@ -262,17 +234,6 @@ def training_testing_garch(vol_hour, all_loc_hour, order_hour, train_split_ratio
 
 
 def training_testing_mixture_rnn(x, y, train_split_ratio):
-    
-    '''
-    for i in range(len(x)):
-        ins = x[i]
-        
-        tmp = []
-        for j in ins:
-            tmp.append( list(np.asarray(j).flatten()) )
-        
-        x[i] = tmp
-    '''
 
     tmp_split = int(train_split_ratio*len(y))
     

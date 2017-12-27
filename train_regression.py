@@ -4,10 +4,11 @@ from utils_libs import *
 from regression_models import *
 
 # --- model and training log set-up ---
-result_file = "res/reg_v_minu.txt"
+result_file = "../bt_results/res/reg_v_minu.txt"
 # test and training errors 
 
-model_file = "model/v_minu"
+# ?
+model_file = "../bt_results/model/v_"
 bool_clf = False
 
 # clean the 
@@ -26,22 +27,23 @@ print np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
 
 # --- start training different models ---
 
-'''
+
 # GBT gradient boosted tree
 gbt_train_validate(xtrain, ytrain, xtest, ytest, 0.0, bool_clf, result_file, model_file + '_gbt.sav')
 
 # Random forest performance
 rf_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, result_file, model_file + '_rf.sav')
 
+
 # XGBoosted extreme gradient boosted
 xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, 0, result_file, model_file + '_xgt.sav')
-'''
+
 
 # log transformation of y
 log_ytrain = []
 #log(ytrain+1e-5)
 
-'''
+
 # Bayesian regression
 bayesian_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_bayes.sav', log_ytrain)
 
@@ -50,13 +52,13 @@ elastic_net_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file
 
 #Ridge regression
 ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_ridge.sav', log_ytrain)
-'''
+
 
 # Gaussain process 
 gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_gp.sav', log_ytrain)
 
 # Lasso 
-#lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_lasso.sav', log_ytrain)
+lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_lasso.sav', log_ytrain)
 
 
 

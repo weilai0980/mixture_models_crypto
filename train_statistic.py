@@ -18,9 +18,9 @@ from statsmodels.stats import diagnostic
 import pyflux as pf
 
 # ---- model and training log set-up ----
-result_file = "res/reg_v_minu.txt"
-log_file = "res/arima"
-model_file = "model/v_minu"
+result_file = "../bt_results/res/reg_v_minu.txt"
+log_file = "../bt_results/res/arima"
+model_file = "../bt_results/model/v_minu"
 
 def oneshot_prediction_arimax( xtr, extr, xts, exts, training_order, arima_order, bool_add_ex ):
     roll_x = xtr

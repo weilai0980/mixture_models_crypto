@@ -53,6 +53,20 @@ Structural time series
 
 ---- To Do ----
 
+Regularization:
+  Automatic Relevance Determination 
+
+Likelihood:
+  GP
+  Regression
+
+  ARIMA
+  Structural
+
+  Mixture
+
+Average percenate error
+
 Evaluation process:
    single volatility
    volatility + order book
@@ -64,6 +78,9 @@ Training scheme:
   Rolling and incremental training / testing 
 
 Mixture:
+  
+  T by F weight matrix
+
   hierachical
   Regualariation 
   Auxililary loss: diversity of experts
