@@ -23,8 +23,11 @@ from sklearn.externals import joblib
 
 import xgboost as xgb
 
-#from utils_keras import *
-#from utils_dataPrepro import *
+
+
+
+file_path = "../bt_results/"
+
 
 
 # ++++ GBT ++++
@@ -168,11 +171,11 @@ def gbt_train_validate(xtrain, ytrain, xtest, ytest, fix_lr, bool_clf, result_fi
         
         # save testing resutls under the best model
         py = model0.predict( xtest )
-        np.savetxt("res/pytest_gbt.txt", zip(py, ytest), delimiter=',')
+        np.savetxt(file_path + "res/pytest_gbt.txt", zip(py, ytest), delimiter=',')
         
         # save training resutls under the best model
         py = model0.predict( xtrain )
-        np.savetxt("res/pytrain_gbt.txt", zip(py, ytrain), delimiter=',')
+        np.savetxt(file_path + "res/pytrain_gbt.txt", zip(py, ytrain), delimiter=',')
         
         return model0
     else:
@@ -180,11 +183,11 @@ def gbt_train_validate(xtrain, ytrain, xtest, ytest, fix_lr, bool_clf, result_fi
         
         # save testing resutls under the best model
         py = model1.predict( xtest )
-        np.savetxt("res/pytest_gbt.txt", zip(py, ytest), delimiter=',')
+        np.savetxt(file_path + "res/pytest_gbt.txt", zip(py, ytest), delimiter=',')
         
         # save training resutls under the best model
         py = model1.predict( xtrain )
-        np.savetxt("res/pytrain_gbt.txt", zip(py, ytrain), delimiter=',')
+        np.savetxt(file_path + "res/pytrain_gbt.txt", zip(py, ytrain), delimiter=',')
         
         return model1
     
@@ -385,22 +388,22 @@ def xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, num_class, result
         
         # save testing resutls under the best model
         py = model0.predict( xg_test )
-        np.savetxt("res/pytest_xgt.txt", zip(py, ytest), delimiter=',')
+        np.savetxt(file_path + "res/pytest_xgt.txt", zip(py, ytest), delimiter=',')
         
         # save training resutls under the best model
         py = model0.predict( xg_train )
-        np.savetxt("res/pytrain_xgt.txt", zip(py, ytrain), delimiter=',')
+        np.savetxt(file_path + "res/pytrain_xgt.txt", zip(py, ytrain), delimiter=',')
         
     else:
         joblib.dump(model1, model_file)
         
         # save testing resutls under the best model
         py = model1.predict( xg_test )
-        np.savetxt("res/pytest_xgt.txt", zip(py, ytest), delimiter=',')
+        np.savetxt(file_path + "res/pytest_xgt.txt", zip(py, ytest), delimiter=',')
         
         # save training resutls under the best model
         py = model1.predict( xg_train )
-        np.savetxt("res/pytrain_xgt.txt", zip(py, ytrain), delimiter=',')
+        np.savetxt(file_path + "res/pytrain_xgt.txt", zip(py, ytrain), delimiter=',')
     
     # save overall errors
     with open(result_file, "a") as text_file:
@@ -475,11 +478,11 @@ def rf_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, result_file, model
         
     # save testing resutls under the best model
     py = model.predict( xtest )
-    np.savetxt("res/pytest_rf.txt", zip(py, ytest), delimiter=',')
+    np.savetxt(file_path + "res/pytest_rf.txt", zip(py, ytest), delimiter=',')
     
     # save training resutls under the best model
     py = model.predict( xtrain )
-    np.savetxt("res/pytrain_rf.txt", zip(py, ytrain), delimiter=',')
+    np.savetxt(file_path + "res/pytrain_rf.txt", zip(py, ytrain), delimiter=',')
 
 
 # ++++ ElasticNet ++++
@@ -540,11 +543,11 @@ def elastic_net_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_
         
     # save testing resutls under the best model
     py = model.predict( xtest )
-    np.savetxt("res/pytest_enet.txt", zip(py, ytest), delimiter=',')
+    np.savetxt(file_path + "res/pytest_enet.txt", zip(py, ytest), delimiter=',')
     
     # save training resutls under the best model
     py = model.predict( xtrain )
-    np.savetxt("res/pytrain_enet.txt", zip(py, ytrain), delimiter=',')
+    np.savetxt(file_path + "res/pytrain_enet.txt", zip(py, ytrain), delimiter=',')
     
     
 # ++++ Bayesian regression ++++
@@ -587,11 +590,11 @@ def bayesian_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model
         
     # save testing resutls under the best model
     py = bayesian_reg.predict( xtest )
-    np.savetxt("res/pytest_bayes.txt", zip(py, ytest), delimiter=',')
+    np.savetxt(file_path + "res/pytest_bayes.txt", zip(py, ytest), delimiter=',')
     
     # save training resutls under the best model
     py = bayesian_reg.predict( xtrain )
-    np.savetxt("res/pytrain_bayes.txt", zip(py, ytrain), delimiter=',')
+    np.savetxt(file_path + "res/pytrain_bayes.txt", zip(py, ytrain), delimiter=',')
 
         
 # ++++ Ridge regression ++++
@@ -646,11 +649,11 @@ def ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_fi
     
     # save testing resutls under the best model
     py = best_model.predict( xtest )
-    np.savetxt("res/pytest_ridge.txt", zip(py, ytest), delimiter=',')
+    np.savetxt(file_path + "res/pytest_ridge.txt", zip(py, ytest), delimiter=',')
     
     # save training resutls under the best model
     py = best_model.predict( xtrain )
-    np.savetxt("res/pytrain_ridge.txt", zip(py, ytrain), delimiter=',')
+    np.savetxt(file_path + "res/pytrain_ridge.txt", zip(py, ytrain), delimiter=',')
 
 # ++++ gaussian process ++++
 
@@ -688,11 +691,11 @@ def gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, tra
     
     # save testing resutls under the best model
     py = gp.predict( xtest )
-    np.savetxt("res/pytest_gp.txt", zip(py, ytest), delimiter=',')
+    np.savetxt(file_path + "res/pytest_gp.txt", zip(py, ytest), delimiter=',')
     
     # save training resutls under the best model
     py = gp.predict( xtrain )
-    np.savetxt("res/pytrain_gp.txt", zip(py, ytrain), delimiter=',')
+    np.savetxt(file_path + "res/pytrain_gp.txt", zip(py, ytrain), delimiter=',')
     
 
 # ++++ lasso regression ++++
@@ -711,6 +714,10 @@ def lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, 
         reg = linear_model.Lasso(alpha = alpha_trial, fit_intercept = True, normalize = True) 
         reg.fit(xtrain, ytrain)
         #clf.coef_, clf.intercept_
+        
+        # test
+        print reg.coef_
+        
         
         pytest = reg.predict(xtest)
         tmp_ts = sqrt(mean((pytest-ytest)*(pytest-ytest)))
@@ -732,14 +739,13 @@ def lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, 
     with open(result_file, "a") as text_file:
         text_file.write( "Lasso regression: %f, %f, %f \n"%(min(tmp_err, key = lambda x:x[1])[0],\
                                                                        tmp_tr, min(tmp_err, key = lambda x:x[1])[1]))
-    
     # save testing resutls under the best model
     py = reg.predict( xtest )
-    np.savetxt("res/pytest_lasso.txt", zip(py, ytest), delimiter=',')
+    np.savetxt(file_path + "res/pytest_lasso.txt", zip(py, ytest), delimiter=',')
     
     # save training resutls under the best model
     py = reg.predict( xtrain )
-    np.savetxt("res/pytrain_lasso.txt", zip(py, ytrain), delimiter=',')
+    np.savetxt(file_path + "res/pytrain_lasso.txt", zip(py, ytrain), delimiter=',')
     
 
 

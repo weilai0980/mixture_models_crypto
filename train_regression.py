@@ -8,7 +8,7 @@ result_file = "../bt_results/res/reg_v_minu.txt"
 # test and training errors 
 
 # ?
-model_file = "../bt_results/model/v_"
+model_file = "../bt_results/model/v_minu"
 bool_clf = False
 
 # clean the 
@@ -56,6 +56,7 @@ ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file +
 
 # Gaussain process 
 gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_gp.sav', log_ytrain)
+
 
 # Lasso 
 lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_lasso.sav', log_ytrain)

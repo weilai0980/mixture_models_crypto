@@ -23,11 +23,6 @@ import numbers
 from tensorflow.python.ops import rnn_cell_impl
 from tensorflow.python.ops.rnn_cell_impl import * 
 
-# --- notes ---
-# put all variable defintions before the excution 
-
-# TO DO:
-# max norm constraints
 
 _BIAS_VARIABLE_NAME = "bias"
 _WEIGHTS_VARIABLE_NAME = "kernel"
@@ -59,8 +54,6 @@ def linear_predict( x, dim_x, scope, bool_bias ):
         w = tf.Variable( tf.random_normal([dim_x, 1], stddev = math.sqrt(1.0/float(dim_x))) )
         b = tf.Variable( tf.zeros([1,]))
         
-        b1 = tf.Variable( tf.zeros([1,]))
-        
         if bool_bias == True:
             h = tf.matmul(x, w) + b
         else:
@@ -73,36 +66,38 @@ def linear_predict( x, dim_x, scope, bool_bias ):
         #regularizer = 0.5*tf.reduce_sum(tf.abs(w)) + 0.5*tf.nn.l2_loss(w)
     
     return tf.squeeze(h), regularizer
-    
 
-def plain_dense( x, x_dim, dim_layers, scope, dropout_keep_prob):
+# shape of x: [b, t, v]
+def bilinear( x, shape_one_x, scope, bool_bias ):
     
     with tf.variable_scope(scope):
-        # initilization
-        w = tf.get_variable('w', [x_dim, dim_layers[0]], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.Variable(tf.zeros([dim_layers[0]]))
-        h = tf.nn.relu( tf.matmul(x, w) + b )
-
-        regularization = tf.nn.l2_loss(w)
-                
-        #dropout
-        h = tf.nn.dropout(h, dropout_keep_prob)
         
-    for i in range(1, len(dim_layers)):
-        with tf.variable_scope(scope+str(i)):
-            w = tf.get_variable('w', [dim_layers[i-1], dim_layers[i]], initializer=tf.contrib.layers.xavier_initializer())
-            b = tf.Variable(tf.zeros( dim_layers[i]))
-            h = tf.nn.relu( tf.matmul(h, w) + b )
-                
-            regularization += tf.nn.l2_loss(w)
+        w_t = tf.Variable(name = 'temp', initial_value = \
+                          tf.random_normal([shape_one_x[0], 1], stddev = math.sqrt(1.0/float(shape_one_x[0]))) )
+        w_v = tf.Variable(name = 'vari', initial_value = \
+                          tf.random_normal([shape_one_x[1], 1], stddev = math.sqrt(1.0/float(shape_one_x[1]))) )
         
-    return h, regularization
+        b = tf.Variable( tf.zeros([1,]) )
+        
+        tmph = tf.tensordot(x, w_v, 1)
+        tmph = tf.squeeze(tmph, [2])
+        
+        if bool_bias == True:
+            h = tf.matmul(tmph, w_t) + b
+        else:
+            h = tf.matmul(tmph, w_t)
+            
+        # l2+l1 regularization
+        regularizer = tf.nn.l2_loss(w_t) + tf.reduce_sum(tf.abs(w_v))
+    
+    return tf.squeeze(h), regularizer
 
-# ---- Mixture Linear optimize likelihood ----
+
+# ---- Mixture linear NORMAL likelihood ----
 
 class mixture_linear_lk():
-    
-    def __init__(self, session, lr, l2, batch_size, order_v, order_distr, is_log):
+
+    def __init__(self, session, lr, l2, batch_size, order_v, order_distr, order_steps, bool_log, bool_bilinear):
         
         # build the network graph 
         self.LEARNING_RATE = lr
@@ -115,25 +110,48 @@ class mixture_linear_lk():
         
         self.sess = session
         
-        self.is_log = is_log
+        self.bool_log = bool_log
         
         # initialize placeholders
         self.v_auto = tf.placeholder(tf.float32, [None, order_v])
-        self.distr = tf.placeholder(tf.float32, [None, order_distr])
-        self.y     = tf.placeholder(tf.float32, [None, ])
-        
+        self.y = tf.placeholder(tf.float32, [None, ])
         self.keep_prob = tf.placeholder(tf.float32)
+        
+        if bool_bilinear == True:
+            self.distr = tf.placeholder(tf.float32, [None, order_steps, order_distr])
+        else:
+            self.distr = tf.placeholder(tf.float32, [None, order_distr])
+        tmp_d = tf.reshape(self.distr, [-1, order_steps*order_distr])
+        
+        # --- prediction of individual models
 
         # models on individual feature groups
-        pre_v, regu_v = linear_predict(self.v_auto, order_v, 'v_auto', True)
-        pre_distr, regu_d = linear_predict(self.distr, order_distr, 'distr', True)
+        pre_v, regu_v_pre = linear_predict(self.v_auto, order_v, 'pre_v', True)
+        
+        if bool_bilinear == True:
+            
+            pre_distr, regu_d_pre = linear_predict( tmp_d, order_steps*order_distr, 'pre_distr', True )
+            #pre_distr, regu_d = bilinear(self.distr, [order_steps, order_distr], 'pre_distr', True)
+        
+        else:
+            pre_distr, regu_d_pre = linear_predict(self.distr, order_distr, 'pre_distr', True)
 
-        # concatenate individual means 
+        # concatenate individual predictions 
         pre = tf.stack( [pre_v, pre_distr], 1 )
+
+        
+        # --- variance of individual models
         
         # variance depedent on features 
         varv, regu_v_var = linear(self.v_auto, order_v, 'sig_v', True)
-        vardistr, regu_d_var = linear(self.distr, order_distr, 'sig_distr', True)
+        
+        if bool_bilinear == True:
+            
+            vardistr, regu_d_var = linear( tmp_d, order_steps*order_distr, 'sig_distr', True )
+            #vardistr, regu_d_var = bilinear(self.distr, [order_steps, order_distr], 'sig_distr', True)
+            
+        else:
+            vardistr, regu_d_var = linear(self.distr, order_distr, 'sig_distr', True)
 
         # variance constant for each expert
         #varv =    tf.Variable(tf.random_normal([1,], stddev = math.sqrt(2.0/float(1.0))) )
@@ -145,31 +163,24 @@ class mixture_linear_lk():
         var_v = tf.square(varv)
         var_distr = tf.square(vardistr)
         
-        #--- gate based on order book --- 
-        '''
-        logit_c, regu_c = linear( self.distr, order_distr , 'logit_c' )
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [1.0-tmp_gate, tmp_gate],1 )
-        '''
-        #--- gate based on volatility features ---
-        '''
-        logit_c, regu_c = linear( self.v_auto, order_v, 'logit_c' )
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
-        '''
-        #--- gate based on concatenated logistic ---
-        '''
-        concat_x = tf.concat( [self.v_auto, self.distr], 1 ) 
-        logit_c, regu_c = linear( concat_x, order_v+order_distr , 'logit_c' )
         
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
-        '''
-        #--- gate based on multimodal distribution ---        
+        # --- gate weights of individual models
+        
+        # gate based on multimodal distribution        
         logit_v, regu_v_gate = linear(self.v_auto, order_v, 'gate_v', True)
-        logit_distr, regu_d_gate = linear(self.distr, order_distr, 'gate_distr', True)
-        self.logit = tf.squeeze( tf.stack( [logit_v, logit_distr], 1 ) )
+        
+        if bool_bilinear == True:
+            
+            #logit_distr, regu_d_gate = linear(tmp_d, order_steps*order_distr, 'gate_distr', True)
+            logit_distr, regu_d_gate = bilinear(self.distr, [order_steps, order_distr], 'gate_distr', False)
+            
+        else:
+            logit_distr, regu_d_gate = linear(self.distr, order_distr, 'gate_distr', True)
+        
+        self.logit = tf.squeeze( tf.stack([logit_v, logit_distr], 1) )
         self.gates = tf.nn.softmax(self.logit)
+        
+        # --- mixture negative log likelihood of normal 
         
         # constant variance
         #tmpllk_v = tf.exp(-0.5*tf.square(self.y- (pre_v)))/(2.0*np.pi)**0.5
@@ -177,24 +188,29 @@ class mixture_linear_lk():
         
         # heteroskedastic
         # ?
-        tmpllk_v = tf.exp(-0.5*tf.square(self.y- (pre_v))/(var_v+1e-5))/(2.0*np.pi*(var_v+1e-5))**0.5
-        tmpllk_distr = tf.exp(-0.5*tf.square(self.y-(pre_distr))/(var_distr+1e-5))/(2.0*np.pi*(var_distr+1e-5))**0.5
+        tmpllk_v = tf.exp(-0.5*tf.square(self.y - pre_v)/(var_v+1e-5))/(2.0*np.pi*(var_v+1e-5))**0.5
+        tmpllk_distr = tf.exp(-0.5*tf.square(self.y - pre_distr)/(var_distr+1e-5))/(2.0*np.pi*(var_distr+1e-5))**0.5
         
-        # negative log likelihood of normal 
         llk = tf.multiply( (tf.stack([tmpllk_v, tmpllk_distr], 1)), self.gates ) 
-        self.neg_logllk = tf.reduce_sum( -1.0*tf.log( tf.reduce_sum(llk, 1)+1e-5 ) )
+        self.neg_logllk = tf.reduce_sum( -1.0*tf.log(tf.reduce_sum(llk, 1)+1e-5) )
         
         # regularization
-        self.regu = 0.0001*(regu_v + regu_d) + 0.000001*(regu_v_gate + regu_d_gate) + \
-                    0.001*(regu_v_var + regu_v_var)
+        if bool_bilinear == True:
+            self.regu = 0.001*(regu_v_pre + regu_v_gate + regu_v_var + regu_d_var) + 0.001*(regu_d_pre + regu_d_gate)
+        else:
+            self.regu = 0.001*(regu_v_pre + regu_d_pre) + 0.000001*(regu_v_gate + regu_d_gate) + \
+            0.001*(regu_v_var + regu_d_var)
         
-        # prediction
-        if is_log == True:
-            self.y_hat = tf.reduce_sum(tf.multiply(tf.exp(pre), self.gates), 1)
+        # --- mixture prediction
+        if bool_log == True:
+            # ?
+            #self.y_hat = tf.reduce_sum(tf.multiply(tf.exp(pre), self.gates), 1)
+            self.y_hat = tf.exp(tf.reduce_sum(tf.multiply(pre, self.gates), 1))
         else:
             self.y_hat = tf.reduce_sum( tf.multiply(pre, self.gates), 1 )
             
         self.err = tf.losses.mean_squared_error( self.y, self.y_hat )
+        
     
     def model_reset(self):
         self.init = tf.global_variables_initializer()
@@ -203,11 +219,19 @@ class mixture_linear_lk():
 #   initialize loss and optimization operations for training
     def train_ini(self):
         
-        # loss: mixed likelihood 
+        # loss: mixed likelihood + regularization
         self.lk_loss = self.neg_logllk + self.regu
         
         # !
-        self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.lk_loss)
+        self.optimizer = tf.train.ProximalAdagradOptimizer(learning_rate = 0.05, \
+                                                          l2_regularization_strength = 0.001, \
+                                                           l1_regularization_strength = 0.05).minimize(self.neg_logllk) 
+        
+        #self.optimizer = tf.train.FtrlOptimizer(learning_rate = 0.03, \
+        #                                        l2_regularization_strength = 0.001, \
+        #                                        l1_regularization_strength = 1.0).minimize(self.neg_logllk)
+        
+        #self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.lk_loss)
         
         self.init = tf.global_variables_initializer()
         self.sess.run( self.init )
@@ -216,7 +240,7 @@ class mixture_linear_lk():
     def train_batch(self, v_train, distr_train, y_train, keep_prob ):
         
         # !
-        _, c = self.sess.run([self.optimizer, self.lk_loss],\
+        _, c = self.sess.run([self.optimizer, self.neg_logllk],\
                              feed_dict={self.v_auto:v_train, \
                                         self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
         return c
@@ -241,145 +265,19 @@ class mixture_linear_lk():
     def predict_logit(self, v_test, distr_test, keep_prob):
         return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,  \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
+    
+    def collect_coeff_values(self, vari_keyword):
+        return [ tf_var.name for tf_var in tf.trainable_variables() if (vari_keyword in tf_var.name) ],\
+    [ tf_var.eval() for tf_var in tf.trainable_variables() if (vari_keyword in tf_var.name) ]
+        
+        
 
-# ---- Mixture Linear optimize squared error ----
-# noisy gate problem
-# increase normalization on gate weight
-class mixture_linear_sq():
-    
-    def __init__(self, session, lr, l2, batch_size, order_v, order_distr, bool_exp_out, is_log):
-        
-        # build the network graph 
-        self.LEARNING_RATE = lr
-                
-        self.N_BATCH = batch_size
-        self.L2 = l2
-   
-        self.MAX_NORM = 0.0
-        self.epsilon = 1e-3
-        
-        self.sess = session
-        
-        self.is_log = is_log
-        
-        # initialize placeholders
-        self.v_auto = tf.placeholder(tf.float32, [None, order_v])
-        self.distr = tf.placeholder(tf.float32, [None, order_distr])
-        self.y     = tf.placeholder(tf.float32, [None, ])
-        
-        self.keep_prob = tf.placeholder(tf.float32)
+# ---- Mixture linear LOG-NORMAL likelihood ----
 
-        # models on individual feature groups
-        pre_v, regular_v     = linear_predict(self.v_auto, order_v, 'v_auto' )
-        pre_distr, regular_distr = linear_predict(self.distr, order_distr, 'distr')
-
-        # concatenate individual means 
-        pre = tf.stack( [pre_v, pre_distr], 1 )
-        
-        #--- gate based on order book --- 
-        '''
-        logit_c, regu_c = linear( self.distr, order_distr , 'logit_c' )
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [1.0-tmp_gate, tmp_gate],1 )
-        '''
-        #--- gate based on volatility features ---
-        '''
-        logit_c, regu_c = linear( self.v_auto, order_v, 'logit_c' )
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
-        '''
-        #--- gate based on concatenated logistic ---
-        '''
-        concat_x = tf.concat( [self.v_auto, self.distr], 1 ) 
-        logit_c, regu_c = linear( concat_x, order_v+order_distr , 'logit_c' )
-        
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
-        '''
-        #--- gate based on multimodal distribution ---        
-        logit_v, regu_v = linear(self.v_auto, order_v,         'gate_v' )
-        logit_distr, regu_d = linear(self.distr, order_distr, 'gate_distr')
-        self.logit = tf.squeeze( tf.stack( [logit_v, logit_distr], 1 ) )
-        self.gates = tf.nn.softmax(self.logit)
-        
-        # prediction
-        self.y_hat_exp = tf.exp(tf.reduce_sum(tf.multiply(pre, self.gates), 1))
-        self.y_hat     = tf.reduce_sum( tf.multiply(pre, self.gates), 1 )
-        
-        # exp of expert out
-        if bool_exp_out == True:
-            self.y_hat = tf.exp(tf.reduce_sum(tf.multiply(pre, self.gates), 1)) 
-        
-        self.err = tf.losses.mean_squared_error( self.y, self.y_hat )
-        
-        # regularization
-        self.regu = 0.0001*(regular_v + regular_distr) + 0.0001*(regu_v + regu_d)     
-    
-    
-    def model_reset(self):
-        self.init = tf.global_variables_initializer()
-        self.sess.run( self.init )
-        
-#   initialize loss and optimization operations for training
-    def train_ini(self):
-        
-        # aboslute error
-        #self.err = tf.losses.absolute_difference( self.y, self.y_hat )
-        
-        self.loss = self.err + self.regu
-        
-        # !
-        self.optimizer = \
-        tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.loss)
-        
-        self.init = tf.global_variables_initializer()
-        self.sess.run( self.init )
-        
-    #   training on batch of data
-    def train_batch(self, v_train, distr_train, y_train, keep_prob ):
-        
-        # !
-        _,c = self.sess.run([self.optimizer, self.loss],\
-                             feed_dict={self.v_auto:v_train, \
-                                        self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
-        return c
-    
-    
-    #   infer givn testing data
-    def inference(self, v_test, distr_test, y_test, keep_prob):
-        
-        if self.is_log == True:
-            self.log_err = tf.reduce_mean((self.y - self.y_hat_exp)*(self.y - self.y_hat_exp))        
-            return self.sess.run([self.log_err, self.regu], feed_dict = {self.v_auto:v_test,  \
-                                                      self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
-        else:
-            return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test,   \
-                                                      self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
-    
-    #   predict givn testing data
-    def predict(self, v_test, distr_test, keep_prob):
-        
-        if self.is_log == True:
-            return self.sess.run( self.y_hat_exp, feed_dict = {self.v_auto:v_test,    \
-                                                       self.distr:distr_test,  self.keep_prob:keep_prob })
-        else:
-            return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test,   \
-                                                       self.distr:distr_test,  self.keep_prob:keep_prob })
-    
-    #   predict givn testing data
-    def predict_gates(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,    \
-                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
-    
-    def predict_logit(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,    \
-                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
-
-# ---- Mixture Linear Log-normal distribution----
 # constant prediction problem
 class mixture_linear_lognorm_lk():
     
-    def __init__(self, session, lr, l2, batch_size, order_v, order_distr ):
+    def __init__(self, session, lr, l2, batch_size, order_v, order_distr, order_steps, bool_bilinear):
         
         # build the network graph 
         self.LEARNING_RATE = lr
@@ -394,88 +292,89 @@ class mixture_linear_lognorm_lk():
         
         # initialize placeholders
         self.v_auto = tf.placeholder(tf.float32, [None, order_v])
-        self.distr = tf.placeholder(tf.float32, [None, order_distr])
         self.y     = tf.placeholder(tf.float32, [None, ])
+        
+        if bool_bilinear == True:
+            self.distr = tf.placeholder(tf.float32, [None, order_steps, order_distr])
+        else:
+            self.distr = tf.placeholder(tf.float32, [None, order_distr])
+        tmp_d = tf.reshape(self.distr, [-1, order_steps*order_distr])
         
         self.keep_prob = tf.placeholder(tf.float32)
         
         # -- prediction of individual models 
         
-        # models on individual feature groups
-        pre_v, regu_v     = linear_predict(self.v_auto, order_v, 'v_auto', True )
-        pre_distr, regu_d = linear_predict(self.distr, order_distr, 'distr', True)
-
+        pre_v, regu_v = linear_predict(self.v_auto, order_v, 'pre_v', True )
+        
+        if bool_bilinear == True:
+            
+            #pre_distr, regu_d = linear_predict( tmp_d, order_steps*order_distr, 'pre_distr', True )
+            pre_distr, regu_d = bilinear(self.distr, [order_steps, order_distr], 'pre_distr', True)
+        
+        else:
+            pre_distr, regu_d = linear_predict(self.distr, order_distr, 'pre_distr', True)
+        
         # concatenate individual means 
-        pre = tf.stack( [pre_v, pre_distr], 1 )
+        pre_stack = tf.stack( [pre_v, pre_distr], 1 )
         
-        # -- variance
+        # -- variance of individual models 
         
-        # variance depedent on features 
-        varv, regu_v_var =   linear(self.v_auto, order_v,   'sig_v', True)
-        vardistr, regu_d_var =linear(self.distr, order_distr,'sig_distr', True)
+        varv, regu_v_var = linear(self.v_auto, order_v, 'sig_v', True)
+        
+        if bool_bilinear == True:
+            
+            vardistr, regu_d_var = linear( tmp_d, order_steps*order_distr, 'sig_distr', True )
+            #vardistr, regu_d_var = bilinear(self.distr, [order_steps, order_distr], 'sig_distr', True)
+            
+        else:
+            vardistr, regu_d_var = linear(self.distr, order_distr, 'sig_distr', True)
 
-        # variance constant for each expert
-        #varv =    tf.Variable(tf.random_normal([1,], stddev = math.sqrt(2.0/float(1.0))) )
-        #varreq =  tf.Variable(tf.random_normal([1,], stddev = math.sqrt(2.0/float(1.0))) )
-        #vardistr= tf.Variable(tf.random_normal([1,], stddev = math.sqrt(2.0/float(1.0))) )
-        #regu_sig = tf.nn.l2_loss(varv)+tf.nn.l2_loss(vardistr)
-        
         # variance standardize 
         var_v = tf.square(varv)
         var_distr = tf.square(vardistr)
+        var_stack = tf.stack( [var_v, var_distr], 1 )
         
-        # -- mixture gate 
+        # -- gate of individual models 
+       
+        # based on multimodal distribution        
+        logit_v, regu_v_gate = linear(self.v_auto, order_v, 'gate_v', True )
         
-        # gate based on order book 
-        '''
-        logit_c, regu_c = linear( self.distr, order_distr , 'logit_c' )
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [1.0-tmp_gate, tmp_gate],1 )
-        '''
-        # gate based on volatility features
-        '''
-        logit_c, regu_c = linear( self.v_auto, order_v, 'logit_c' )
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
-        '''
-        # gate based on concatenated logistic
-        '''
-        concat_x = tf.concat( [self.v_auto, self.distr], 1 ) 
-        logit_c, regu_c = linear( concat_x, order_v+order_distr , 'logit_c' )
+        if bool_bilinear == True:
+            
+            #logit_distr, regu_d_gate = linear(tmp_d, order_steps*order_distr, 'gate_distr', True)
+            logit_distr, regu_d_gate = bilinear(self.distr, [order_steps, order_distr], 'gate_distr', False)
+            
+        else:
+            logit_distr, regu_d_gate = linear(self.distr, order_distr, 'gate_distr', True)
         
-        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
-        self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
-        '''
-        # gate based on multimodal distribution        
-        logit_v, regu_v_weight = linear(self.v_auto, order_v,    'gate_v', True )
-        logit_distr, regu_d_weight = linear(self.distr, order_distr, 'gate_distr', True)
         self.logit = tf.squeeze( tf.stack( [logit_v, logit_distr], 1 ) )
         self.gates = tf.nn.softmax(self.logit)
         
         # -- negative log likelihood of log normal 
-        
-        # variance constant
-        #tmpllk_v = tf.exp(-0.5*tf.square(tf.log(self.y+1e-5)-pre_v))/(2.0*np.pi)**0.5/(self.y+1e-5)
-        #tmpllk_distr = tf.exp(-0.5*tf.square(tf.log(self.y+1e-5)-pre_distr))/(2.0*np.pi)**0.5/(self.y+1e-5)
          
-        # with variance variable 
-        tmpllk_v = tf.exp(-0.5*tf.square(tf.log(self.y+1e-5)- pre_v)/(var_v**2+1e-5))/(2.0*np.pi*(var_v**2+1e-5))**0.5/(self.y+1e-5)
-        tmpllk_distr = tf.exp(-0.5*tf.square(tf.log(self.y+1e-5)-pre_distr)/(var_distr**2+1e-5))/(2.0*np.pi*(var_distr**2+1e-5))**0.5/(self.y+1e-5)
+        # ? 
+        tmpllk_v = tf.exp(-0.5*tf.square(tf.log(self.y+1e-5)- pre_v)/(var_v+1e-5))/(2.0*np.pi*(var_v+1e-5))**0.5/(self.y+1e-5)
+        tmpllk_distr = tf.exp(-0.5*tf.square(tf.log(self.y+1e-5)-pre_distr)/(var_distr+1e-5))/(2.0*np.pi*(var_distr+1e-5))**0.5/(self.y+1e-5)
         
-        llk = tf.multiply( (tf.stack([tmpllk_v, tmpllk_distr], 1)), self.gates ) 
-        self.neg_logllk = tf.reduce_sum( -1.0*tf.log(tf.reduce_sum(llk, 1)+1e-5) )
+        llk = tf.multiply((tf.stack([tmpllk_v, tmpllk_distr], 1)), self.gates ) 
+        self.neg_logllk = tf.reduce_sum(-1.0*tf.log( tf.reduce_sum(llk, 1)+1e-5 ))
         
-        # -- prediction and errors
+        # -- mixture prediction and errors
         
-        # mixed expectation of log normal
-        self.y_hat = tf.reduce_sum(tf.multiply(tf.exp(pre), self.gates), 1)
+        # ? + var_stack
+        self.y_hat = tf.reduce_sum(tf.multiply(tf.exp(pre_stack), self.gates), 1)
         
         # prediction errors
         self.err = tf.losses.mean_squared_error( self.y, self.y_hat )
         
         # -- regularization
-        self.regu =  0.0001*(regu_v + regu_d)+ 0.001*(regu_v_var + regu_d_var) + 0.001*(regu_v_weight + regu_v_weight)
         
+        if bool_bilinear == True:
+            self.regu =  0.01*(regu_v + regu_v_gate + regu_v_var + regu_d_var) + 0.001*(regu_d + regu_d_var)
+        else:
+            self.regu =  0.01*(regu_v + regu_d) + 0.0001*(regu_v_gate + regu_v_gate) + 0.0001*(regu_v_var + regu_d_var)
+    
+    
     def model_reset(self):
         self.init = tf.global_variables_initializer()
         self.sess.run( self.init )
@@ -486,7 +385,8 @@ class mixture_linear_lognorm_lk():
         # loss: mixed likelihood 
         self.lk_loss = self.neg_logllk + self.regu
         
-        # !
+        # ? 
+        #self.optimizer = tf.train.FtrlOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.lk_loss)
         self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.lk_loss)
         
         self.init = tf.global_variables_initializer()
@@ -523,6 +423,143 @@ class mixture_linear_lognorm_lk():
         return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,   \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
+    def collect_coeff_values(self, vari_keyword):
+        return [ tf_var.name for tf_var in tf.trainable_variables() if (vari_keyword in tf_var.name) ],\
+    [ tf_var.eval() for tf_var in tf.trainable_variables() if (vari_keyword in tf_var.name) ]
+    
+    
+# ---- Mixture linear optimize squared error ----
+# noisy gate problem
+# increase normalization on gate weight
+class mixture_linear_sq():
+    
+    def __init__(self, session, lr, l2, batch_size, order_v, order_distr, bool_exp_out, bool_log):
+        
+        # build the network graph 
+        self.LEARNING_RATE = lr
+                
+        self.N_BATCH = batch_size
+        self.L2 = l2
+   
+        self.MAX_NORM = 0.0
+        self.epsilon = 1e-3
+        
+        self.sess = session
+        
+        self.bool_log = bool_log
+        
+        # initialize placeholders
+        self.v_auto = tf.placeholder(tf.float32, [None, order_v])
+        self.distr = tf.placeholder(tf.float32, [None, order_distr])
+        self.y     = tf.placeholder(tf.float32, [None, ])
+        
+        self.keep_prob = tf.placeholder(tf.float32)
+
+        # models on individual feature groups
+        pre_v, regu_v     = linear_predict(self.v_auto, order_v, 'v_auto', True)
+        pre_distr, regu_distr = linear_predict(self.distr, order_distr, 'distr', True)
+
+        # concatenate individual means 
+        pre = tf.stack( [pre_v, pre_distr], 1 )
+        
+        #--- gate based on order book --- 
+        '''
+        logit_c, regu_c = linear( self.distr, order_distr , 'logit_c' )
+        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
+        self.gates = tf.stack( [1.0-tmp_gate, tmp_gate],1 )
+        '''
+        #--- gate based on volatility features ---
+        '''
+        logit_c, regu_c = linear( self.v_auto, order_v, 'logit_c' )
+        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
+        self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
+        '''
+        #--- gate based on concatenated logistic ---
+        '''
+        concat_x = tf.concat( [self.v_auto, self.distr], 1 ) 
+        logit_c, regu_c = linear( concat_x, order_v+order_distr , 'logit_c' )
+        
+        tmp_gate = tf.sigmoid( tf.squeeze(logit_c) )
+        self.gates = tf.stack( [tmp_gate, 1.0-tmp_gate],1 )
+        '''
+        #--- gate based on multimodal distribution ---        
+        logit_v, regu_v_gate = linear(self.v_auto, order_v,        'gate_v', True)
+        logit_distr, regu_d_gate = linear(self.distr, order_distr, 'gate_distr', True)
+        self.logit = tf.squeeze( tf.stack( [logit_v, logit_distr], 1 ) )
+        self.gates = tf.nn.softmax(self.logit)
+        
+        # prediction
+        self.y_hat_exp = tf.exp(tf.reduce_sum(tf.multiply(pre, self.gates), 1))
+        self.y_hat     = tf.reduce_sum( tf.multiply(pre, self.gates), 1 )
+        
+        # exp of expert out
+        if bool_exp_out == True:
+            self.y_hat = tf.exp(tf.reduce_sum(tf.multiply(pre, self.gates), 1)) 
+        
+        self.err = tf.losses.mean_squared_error( self.y, self.y_hat )
+        
+        # regularization
+        self.regu = 0.0001*(regu_v + regu_distr) + 0.0001*(regu_v_gate + regu_d_gate)     
+    
+    
+    def model_reset(self):
+        self.init = tf.global_variables_initializer()
+        self.sess.run( self.init )
+        
+#   initialize loss and optimization operations for training
+    def train_ini(self):
+        
+        # aboslute error
+        #self.err = tf.losses.absolute_difference( self.y, self.y_hat )
+        
+        self.loss = self.err + self.regu
+        
+        # !
+        self.optimizer = \
+        tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.loss)
+        
+        self.init = tf.global_variables_initializer()
+        self.sess.run( self.init )
+        
+    #   training on batch of data
+    def train_batch(self, v_train, distr_train, y_train, keep_prob ):
+        
+        # !
+        _,c = self.sess.run([self.optimizer, self.loss],\
+                             feed_dict={self.v_auto:v_train, \
+                                        self.distr:distr_train, self.y:y_train, self.keep_prob:keep_prob })
+        return c
+    
+    
+    #   infer givn testing data
+    def inference(self, v_test, distr_test, y_test, keep_prob):
+        
+        if self.bool_log == True:
+            self.log_err = tf.reduce_mean((self.y - self.y_hat_exp)*(self.y - self.y_hat_exp))        
+            return self.sess.run([self.log_err, self.regu], feed_dict = {self.v_auto:v_test,  \
+                                                      self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
+        else:
+            return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test,   \
+                                                      self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
+    
+    #   predict givn testing data
+    def predict(self, v_test, distr_test, keep_prob):
+        
+        if self.bool_log == True:
+            return self.sess.run( self.y_hat_exp, feed_dict = {self.v_auto:v_test,    \
+                                                       self.distr:distr_test,  self.keep_prob:keep_prob })
+        else:
+            return self.sess.run( self.y_hat, feed_dict = {self.v_auto:v_test,   \
+                                                       self.distr:distr_test,  self.keep_prob:keep_prob })
+    
+    #   predict givn testing data
+    def predict_gates(self, v_test, distr_test, keep_prob):
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,    \
+                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
+    
+    def predict_logit(self, v_test, distr_test, keep_prob):
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,    \
+                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     
 # ---- Mixture Linear Exponential distribution ----
 class mixture_linear_exp():
@@ -655,6 +692,9 @@ class mixture_linear_exp():
         return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test, \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
+
+    
+# --- Neural Mixture Models Below ---    
     
 # ---- Mixture MLP ---- 
 
@@ -940,6 +980,29 @@ class neural_plain_mlp():
     
     
 # ---- Utility functions for LSTM ----
+
+def plain_dense( x, x_dim, dim_layers, scope, dropout_keep_prob):
+    
+    with tf.variable_scope(scope):
+        # initilization
+        w = tf.get_variable('w', [x_dim, dim_layers[0]], dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.Variable(tf.zeros([dim_layers[0]]))
+        h = tf.nn.relu( tf.matmul(x, w) + b )
+
+        regularization = tf.nn.l2_loss(w)
+                
+        #dropout
+        h = tf.nn.dropout(h, dropout_keep_prob)
+        
+    for i in range(1, len(dim_layers)):
+        with tf.variable_scope(scope+str(i)):
+            w = tf.get_variable('w', [dim_layers[i-1], dim_layers[i]], initializer=tf.contrib.layers.xavier_initializer())
+            b = tf.Variable(tf.zeros( dim_layers[i]))
+            h = tf.nn.relu( tf.matmul(h, w) + b )
+                
+            regularization += tf.nn.l2_loss(w)
+        
+    return h, regularization
 
 def _linear(args,
             output_size,

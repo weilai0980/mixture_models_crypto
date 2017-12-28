@@ -65,11 +65,12 @@ xtr_distr = conti_normalization_train_dta( xtr_distr )
 print np.shape(xtr_v), np.shape(xtr_distr)
 print np.shape(xts_v), np.shape(xts_distr)
 
+
 # ---- common parameters ----
 
 # txt file to record errors in training process 
 training_log  = "../bt_results/res/mix_train_log.txt"
-res_log    = "../bt_results/res/mix.txt"
+res_file    = "../bt_results/res/mix.txt"
 model_file = '../bt_results/model/mix'
 
 # initialize the log
@@ -79,9 +80,7 @@ with open(training_log, "w") as text_file:
 bool_train = True
 
 # fixed parameters
-para_order_v     = len(xtr_v[0])
-para_order_distr = len(xtr_distr[0])
-
+para_order_v = len(xtr_v[0])
 
 # ---- Approach specific parameters ----
 
@@ -92,9 +91,23 @@ para_n_epoch_linear = 300
 para_batch_size_linear = 64
 para_l2_linear = 0.001
 
-para_y_log = True
+para_y_log = False
 para_pred_exp = False
 
+if len(np.shape(xtr_distr)) > 2:
+    para_bool_bilinear = True
+    para_order_distr = len(xtr_distr[0][0])
+    para_order_steps = len(xtr_distr[0])
+    
+    print '     !! Time-first order !! '
+    
+else:
+    para_bool_bilinear = False
+    para_order_distr = len(xtr_distr[0])
+    para_order_steps = 0
+    
+    print '     !! Flattened features !! '
+    
 '''
 # -- Mixture MLP 
 # representability
@@ -106,7 +119,7 @@ para_batch_size_mlp = 64
 # regularization
 para_l2_mlp = 0.005
 para_keep_prob_mlp = 1.0
-'''
+
 # -- Mixture LSTM 
 
 #para_loss_type = 'norm'
@@ -126,6 +139,7 @@ para_keep_prob_lstm = 1.0
 
 para_model_check = 10
 
+'''
 
 # ---- main process ----
 
@@ -137,12 +151,22 @@ if bool_train == True:
         
         if method == 'linear_lk':
             clf = mixture_linear_lk(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
-                                  para_order_distr, para_y_log)
+                                  para_order_distr, para_order_steps, para_y_log, para_bool_bilinear)
             para_n_epoch = para_n_epoch_linear
             para_batch_size = para_batch_size_linear
             para_keep_prob = 0.0
             
             model_file += '_linear_lk.ckpt'
+            
+        elif method == 'linear_log':
+            clf = mixture_linear_lognorm_lk(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
+                                 para_order_distr, para_order_steps, para_bool_bilinear)
+            para_n_epoch = para_n_epoch_linear
+            para_batch_size = para_batch_size_linear
+            para_keep_prob = 0.0
+            para_y_log = False
+            
+            model_file += '_linear_lognorm.ckpt'
             
         elif method == 'linear_sq':
             clf = mixture_linear_sq(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
@@ -152,17 +176,6 @@ if bool_train == True:
             para_keep_prob = 0.0
             
             model_file += '_linear_sq.ckpt'
-            
-            
-        elif method == 'linear_log':
-            clf = mixture_linear_lognorm_lk(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
-                                 para_order_distr)
-            para_n_epoch = para_n_epoch_linear
-            para_batch_size = para_batch_size_linear
-            para_keep_prob = 0.0
-            para_y_log = False
-            
-            model_file += '_linear_lognorm.ckpt'
             
         elif method == 'mlp':
             clf = neural_mixture_dense(sess, para_n_hidden_list_mlp, para_lr_mlp, para_l2_mlp, para_batch_size_mlp,\
@@ -221,6 +234,7 @@ if bool_train == True:
                 batch_v    =  xtr_v[ batch_idx ]
                 batch_distr=  xtr_distr[ batch_idx ]
                 
+                # log transformation on the target
                 if para_y_log == True:
                     batch_y = log(ytrain[batch_idx]+1e-5)
                 else:
@@ -232,20 +246,17 @@ if bool_train == True:
             tmp_train_acc = clf.inference(xtr_v, xtr_distr, ytrain, para_keep_prob)
             tmp_test_acc  = clf.inference(xts_v, xts_distr, ytest,  para_keep_prob,) 
             
+            # record for re-tratin the model 
             tmp_test_err.append( [epoch, sqrt(tmp_train_acc[0]), sqrt(tmp_test_acc[0])] )
             
             print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, sqrt(tmp_train_acc[0]), tmp_train_acc[1],\
             sqrt(tmp_test_acc[0]), tmp_test_acc[1] 
             
-            # save training and validation errors
-            with open(training_log, "a") as text_file:
-                text_file.write( "Epoch %d : %f, %f, %f,  \n"%(epoch, 1.0*tmpc/total_batch,\
-                                                               sqrt(tmp_train_acc[0]), sqrt(tmp_test_acc[0]))) 
-                
+            
         print "Optimization Finished!"
         
         # save overall errors
-        with open(res_log, "a") as text_file:
+        with open(res_file, "a") as text_file:
             text_file.write( "Mixture %s : %s  \n"%(method, str(min(tmp_test_err, key = lambda x:x[2])) )) 
          
         
@@ -283,18 +294,22 @@ if bool_train == True:
         
         #?
         py = clf.predict(xts_v, xts_distr, para_keep_prob) 
-        np.savetxt("../bt_results/res/pytest.txt",  zip(py, ytest), delimiter=',')
+        np.savetxt("../bt_results/res/pytest_mix.txt",  zip(py, ytest), delimiter=',')
         
         py = clf.predict(xtr_v, xtr_distr, para_keep_prob) 
-        np.savetxt("../bt_results/res/pytrain.txt", zip(py, ytrain), delimiter=',')
+        np.savetxt("../bt_results/res/pytrain_mix.txt", zip(py, ytrain), delimiter=',')
         
         gates_hat = clf.predict_gates(xts_v, xts_distr, para_keep_prob)
         np.savetxt("../bt_results/res/gate_test.txt", gates_hat, delimiter=',')
         
         gates = clf.predict_gates(xtr_v, xtr_distr, para_keep_prob)
         np.savetxt("../bt_results/res/gate_train.txt", gates, delimiter=',')
-     
-    
+        
+        # collect the values of all optimized parameters
+        print 'prediction \n', clf.collect_coeff_values("pre")
+        print 'variance \n', clf.collect_coeff_values("sig")
+        print 'gate \n', clf.collect_coeff_values("gate")
+        
 else:
     
     # --- train the network under the best parameter set-up ---

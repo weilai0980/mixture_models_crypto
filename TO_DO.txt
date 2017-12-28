@@ -51,21 +51,31 @@ Feature engineering
   
 Structural time series
 
+bilinear
+  L1/L0 norm
+
+bilinear in log norm
+
 ---- To Do ----
 
+https://aksarkar.github.io/nwas/example.html
+
 Regularization:
-  Automatic Relevance Determination 
+  Automatic Relevance Determination
+  l1,2
+  group lasso, graphical lasso
 
-Likelihood:
-  GP
-  Regression
+Evaluation metric:
+   Average percenate error
+   
+   Likelihood:
+    GP
+    Regression
 
-  ARIMA
-  Structural
+    ARIMA
+    Structural
 
-  Mixture
-
-Average percenate error
+    Mixture
 
 Evaluation process:
    single volatility
@@ -79,22 +89,23 @@ Training scheme:
 
 Mixture:
   
-  T by F weight matrix
 
+  
   hierachical
-  Regualariation 
-  Auxililary loss: diversity of experts
-  Learning Factored Representations in a Deep Mixture of Experts
+   
+  Auxililary loss: diversity of experts:  Learning Factored Representations in a Deep Mixture of Experts
   Sparse & regularization:
   Relevance Vector Machines
   Spike and slab 
-  L1/L0 norm
-  Auxiliary superision in loss functions
+  
 
 Baseline:
   moving average and filter
   aggregate to the same grnularity, gaussian process 
   
+
+
+
 Bayesian:
   mixture regression 
   temporal mixture regression 
@@ -192,6 +203,8 @@ paper Inferring The Latent Structure of Human Decision-Making from Raw
 ADVI: variational inference
 
 (2015)Probabilistic Dynamic Causal Model for Temporal
+
+A user-centric model of voting intention from Social Media
 
 -- time series
 
