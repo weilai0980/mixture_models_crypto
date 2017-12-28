@@ -86,7 +86,7 @@ para_order_v = len(xtr_v[0])
 
 #-- Mixture linear
 
-para_lr_linear = 0.001
+para_lr_linear = 0.005
 para_n_epoch_linear = 300
 para_batch_size_linear = 64
 para_l2_linear = 0.001

@@ -88,9 +88,9 @@ def bilinear( x, shape_one_x, scope, bool_bias ):
             h = tf.matmul(tmph, w_t)
             
         # l2+l1 regularization
-        regularizer = tf.nn.l2_loss(w_t) + tf.reduce_sum(tf.abs(w_v))
+        #regularizer = tf.nn.l2_loss(w_t) + 
     
-    return tf.squeeze(h), regularizer
+    return tf.squeeze(h), [ tf.nn.l2_loss(w_t), tf.reduce_sum(tf.abs(w_v)) ] 
 
 
 # ---- Mixture linear NORMAL likelihood ----
@@ -129,7 +129,7 @@ class mixture_linear_lk():
         pre_v, regu_v_pre = linear_predict(self.v_auto, order_v, 'pre_v', True)
         
         if bool_bilinear == True:
-            
+            # ?
             pre_distr, regu_d_pre = linear_predict( tmp_d, order_steps*order_distr, 'pre_distr', True )
             #pre_distr, regu_d = bilinear(self.distr, [order_steps, order_distr], 'pre_distr', True)
         
@@ -146,7 +146,7 @@ class mixture_linear_lk():
         varv, regu_v_var = linear(self.v_auto, order_v, 'sig_v', True)
         
         if bool_bilinear == True:
-            
+            # ?
             vardistr, regu_d_var = linear( tmp_d, order_steps*order_distr, 'sig_distr', True )
             #vardistr, regu_d_var = bilinear(self.distr, [order_steps, order_distr], 'sig_distr', True)
             
@@ -170,7 +170,7 @@ class mixture_linear_lk():
         logit_v, regu_v_gate = linear(self.v_auto, order_v, 'gate_v', True)
         
         if bool_bilinear == True:
-            
+            # ?
             #logit_distr, regu_d_gate = linear(tmp_d, order_steps*order_distr, 'gate_distr', True)
             logit_distr, regu_d_gate = bilinear(self.distr, [order_steps, order_distr], 'gate_distr', False)
             
@@ -194,9 +194,10 @@ class mixture_linear_lk():
         llk = tf.multiply( (tf.stack([tmpllk_v, tmpllk_distr], 1)), self.gates ) 
         self.neg_logllk = tf.reduce_sum( -1.0*tf.log(tf.reduce_sum(llk, 1)+1e-5) )
         
-        # regularization
+        # --- regularization
         if bool_bilinear == True:
             self.regu = 0.001*(regu_v_pre + regu_v_gate + regu_v_var + regu_d_var) + 0.001*(regu_d_pre + regu_d_gate)
+        
         else:
             self.regu = 0.001*(regu_v_pre + regu_d_pre) + 0.000001*(regu_v_gate + regu_d_gate) + \
             0.001*(regu_v_var + regu_d_var)
@@ -224,8 +225,8 @@ class mixture_linear_lk():
         
         # !
         self.optimizer = tf.train.ProximalAdagradOptimizer(learning_rate = 0.05, \
-                                                          l2_regularization_strength = 0.001, \
-                                                           l1_regularization_strength = 0.05).minimize(self.neg_logllk) 
+                                                          #l2_regularization_strength = 0.01, \
+                                                          l1_regularization_strength = 0.04).minimize(self.neg_logllk) 
         
         #self.optimizer = tf.train.FtrlOptimizer(learning_rate = 0.03, \
         #                                        l2_regularization_strength = 0.001, \
@@ -304,15 +305,15 @@ class mixture_linear_lognorm_lk():
         
         # -- prediction of individual models 
         
-        pre_v, regu_v = linear_predict(self.v_auto, order_v, 'pre_v', True )
+        pre_v, regu_v_pre = linear_predict(self.v_auto, order_v, 'pre_v', True )
         
         if bool_bilinear == True:
             
             #pre_distr, regu_d = linear_predict( tmp_d, order_steps*order_distr, 'pre_distr', True )
-            pre_distr, regu_d = bilinear(self.distr, [order_steps, order_distr], 'pre_distr', True)
+            pre_distr, regu_d_pre = bilinear(self.distr, [order_steps, order_distr], 'pre_distr', True)
         
         else:
-            pre_distr, regu_d = linear_predict(self.distr, order_distr, 'pre_distr', True)
+            pre_distr, regu_d_pre = linear_predict(self.distr, order_distr, 'pre_distr', True)
         
         # concatenate individual means 
         pre_stack = tf.stack( [pre_v, pre_distr], 1 )
@@ -342,7 +343,8 @@ class mixture_linear_lognorm_lk():
         if bool_bilinear == True:
             
             #logit_distr, regu_d_gate = linear(tmp_d, order_steps*order_distr, 'gate_distr', True)
-            logit_distr, regu_d_gate = bilinear(self.distr, [order_steps, order_distr], 'gate_distr', False)
+            logit_distr, regu_d_gate = bilinear(self.distr, [order_steps, order_distr], \
+                                                                   'gate_distr', False)
             
         else:
             logit_distr, regu_d_gate = linear(self.distr, order_distr, 'gate_distr', True)
@@ -370,9 +372,14 @@ class mixture_linear_lognorm_lk():
         # -- regularization
         
         if bool_bilinear == True:
-            self.regu =  0.01*(regu_v + regu_v_gate + regu_v_var + regu_d_var) + 0.001*(regu_d + regu_d_var)
+            
+            # group of l2 + group of l1
+            self.regu = 0.0001*(regu_v_pre + regu_d_pre[0]) + 0.0001*(regu_v_gate + regu_d_gate[0]) + \
+            0.0001*(regu_v_var + regu_d_var) + 0.1*(regu_d_pre[1]) + 0.1*(regu_d_gate[1])
+        
         else:
-            self.regu =  0.01*(regu_v + regu_d) + 0.0001*(regu_v_gate + regu_v_gate) + 0.0001*(regu_v_var + regu_d_var)
+            self.regu = 0.01*(regu_v_pre + regu_d_pre) + 0.0001*(regu_v_gate + regu_v_gate) + \
+            0.0001*(regu_v_var + regu_d_var)
     
     
     def model_reset(self):
@@ -382,11 +389,10 @@ class mixture_linear_lognorm_lk():
 #   initialize loss and optimization operations for training
     def train_ini(self):
         
-        # loss: mixed likelihood 
+        # loss: mixed likelihood + regularization 
         self.lk_loss = self.neg_logllk + self.regu
         
         # ? 
-        #self.optimizer = tf.train.FtrlOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.lk_loss)
         self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.lk_loss)
         
         self.init = tf.global_variables_initializer()
@@ -426,6 +432,8 @@ class mixture_linear_lognorm_lk():
     def collect_coeff_values(self, vari_keyword):
         return [ tf_var.name for tf_var in tf.trainable_variables() if (vari_keyword in tf_var.name) ],\
     [ tf_var.eval() for tf_var in tf.trainable_variables() if (vari_keyword in tf_var.name) ]
+    
+    
     
     
 # ---- Mixture linear optimize squared error ----
