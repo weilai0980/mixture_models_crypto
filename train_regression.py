@@ -4,11 +4,11 @@ from utils_libs import *
 from regression_models import *
 
 # --- model and training log set-up ---
-result_file = "../bt_results/res/reg_v_minu.txt"
+result_file = "../bt_results/res/reg_v.txt"
 # test and training errors 
 
 # ?
-model_file = "../bt_results/model/v_minu"
+model_file = "../bt_results/model/v_"
 bool_clf = False
 
 # clean the 
@@ -16,7 +16,8 @@ bool_clf = False
 #    text_file.close()
 
 # --- Load pre-processed training and testing data ---
-file_postfix = "v_minu_reg"
+file_postfix = "v_reg"
+
 xtrain = np.load("../dataset/bitcoin/training_data/xtrain_"+file_postfix+".dat")
 xtest  = np.load("../dataset/bitcoin/training_data/xtest_" +file_postfix+".dat")
 ytrain = np.load("../dataset/bitcoin/training_data/ytrain_"+file_postfix+".dat")
@@ -24,6 +25,7 @@ ytest  = np.load("../dataset/bitcoin/training_data/ytest_" +file_postfix+".dat")
 
 # all feature vectors are already normalized
 print np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
+
 
 # --- start training different models ---
 
@@ -43,6 +45,9 @@ xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, 0, result_file, model
 log_ytrain = []
 #log(ytrain+1e-5)
 
+# Gaussain process 
+gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_gp.sav', log_ytrain)
+
 
 # Bayesian regression
 bayesian_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_bayes.sav', log_ytrain)
@@ -52,10 +57,6 @@ elastic_net_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file
 
 #Ridge regression
 ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_ridge.sav', log_ytrain)
-
-
-# Gaussain process 
-gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_gp.sav', log_ytrain)
 
 
 # Lasso 

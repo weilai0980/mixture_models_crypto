@@ -56,15 +56,31 @@ bilinear
 
 bilinear in log norm
 
+lasso bilinear
+
+loss function
 ---- To Do ----
 
 https://aksarkar.github.io/nwas/example.html
+
+result analysis: visualize each expert prediction 
+
+Seed the random number generator
+
+MAPE error 
+
+relation between mixture weigth and volatility up/down
+ 
+pattern 
+
+confidence interval 
 
 Regularization:
   Automatic Relevance Determination
   l1,2
   group lasso, graphical lasso
-
+  
+ 
 Evaluation metric:
    Average percenate error
    
@@ -76,6 +92,7 @@ Evaluation metric:
     Structural
 
     Mixture
+    
 
 Evaluation process:
    single volatility
@@ -88,8 +105,6 @@ Training scheme:
   Rolling and incremental training / testing 
 
 Mixture:
-  
-
   
   hierachical
    
@@ -193,6 +208,9 @@ Learning Factored Representations in a Deep Mixture of Experts
 Adaptive Feature Abstraction for Translating Video to Text
 
 -- Statistical
+
+Sparse Bilinear Logistic Regression
+
 
 bayesian mixture models for multivariate time series with an application to austrilian rainfall data
 
