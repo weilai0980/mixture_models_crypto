@@ -59,7 +59,11 @@ bilinear in log norm
 lasso bilinear
 
 loss function
+
+MAPE error 
 ---- To Do ----
+
+reload all data and record month location 
 
 https://aksarkar.github.io/nwas/example.html
 
@@ -67,7 +71,7 @@ result analysis: visualize each expert prediction
 
 Seed the random number generator
 
-MAPE error 
+
 
 relation between mixture weigth and volatility up/down
  
@@ -209,6 +213,8 @@ Adaptive Feature Abstraction for Translating Video to Text
 
 -- Statistical
 
+temporal features 
+
 Sparse Bilinear Logistic Regression
 
 
@@ -225,6 +231,8 @@ ADVI: variational inference
 A user-centric model of voting intention from Social Media
 
 -- time series
+
+(2015)unsupervised feature learning from temporal data
 
 Extracting Interpretable Features for Early Classification on Time Series
 

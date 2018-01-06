@@ -1,5 +1,10 @@
 #!/usr/bin/python
 
+# local
+from utils_libs import *
+from utils_data_prep import *
+from mixture import *
+
 import sys
 import os
 
@@ -13,39 +18,85 @@ from tensorflow.contrib import rnn
 import math
 import random
 
-# local packages 
-from utils_libs import *
-from utils_data_prep import *
-from mixture import *
 
+#print 'Number of arguments:', len(sys.argv), 'arguments.'
 print '--- Argument List:', str(sys.argv)
-method = str(sys.argv[1])
-# linear, mlp, rnn
-para_loss_type = str(sys.argv[2])
-#'lk', 'sg'
-para_distr_type = str(sys.argv[3])
-#'log', 'norm'
-train_mode = str(sys.argv[4])
-# oneshot, roll, incre
+method = str(sys.argv[1]) 
+#run_mode = str(sys.argv[2])
+#loss_type = str(sys.argv[2])
+
+
+# ---- Load pre-processed training and testing data ----
+# norm_v_minu_mix, for rnn mixture: neu_norm_v_minu_mix
+
+'''
+if run_mode == 'gpu':
+    file_postfix = "neu_norm_v_minu_mix"
+    xtrain = np.load("../dataset/bk/xtrain_"+file_postfix+".dat")
+    xtest  = np.load("../dataset/bk/xtest_" +file_postfix+".dat")
+    ytrain = np.load("../dataset/bk/ytrain_"+file_postfix+".dat")
+    ytest  = np.load("../dataset/bk/ytest_" +file_postfix+".dat")
+
+elif run_mode == 'local':
+'''    
+    
+file_postfix = "v_minu_mix"
+xtrain = np.load("../dataset/bitcoin/training_data/xtrain_"+file_postfix+".dat")
+xtest  = np.load("../dataset/bitcoin/training_data/xtest_" +file_postfix+".dat")
+ytrain = np.load("../dataset/bitcoin/training_data/ytrain_"+file_postfix+".dat")
+ytest  = np.load("../dataset/bitcoin/training_data/ytest_" +file_postfix+".dat")
+
+print np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
+
+# split training and testing data into three feature groups      
+xtr_v =   np.asarray( [i[0] for i in xtrain] )
+xtr_distr = np.asarray( [i[1] for i in xtrain] )
+
+xts_v =   np.asarray( [i[0] for i in xtest] )
+xts_distr = np.asarray( [i[1] for i in xtest] )
+
+# !! IMPORTANT: feature normalization
+
+xts_v = conti_normalization_test_dta(  xts_v, xtr_v )
+xtr_v = conti_normalization_train_dta( xtr_v )
+
+xts_distr = conti_normalization_test_dta(  xts_distr, xtr_distr )
+xtr_distr = conti_normalization_train_dta( xtr_distr )
+
+# test
+'''
+xts_v = xts_v[300:]
+xts_distr = xts_distr[300:]
+ytest = ytest[300:]
+'''
+'''
+ytrain = ytrain * 100
+ytest = ytest * 100
+'''
+
+print np.shape(xtr_v), np.shape(xtr_distr)
+print np.shape(xts_v), np.shape(xts_distr)
 
 # ---- common parameters ----
 
 # txt file to record errors in training process 
 training_log  = "../bt_results/res/mix_train_log.txt"
+res_file    = "../bt_results/res/mix.txt"
+model_file = '../bt_results/model/mix'
+
 # initialize the log
 with open(training_log, "w") as text_file:
     text_file.close()
 
-# ---- parameter set-up for preparing trainning and testing data ----
-para_order_minu = 30
-para_order_hour = 16
-bool_feature_selection = False
+bool_train = True
 
-para_bool_bilinear = True
+# fixed parameters
+para_order_v = len(xtr_v[0])
 
 # ---- Approach specific parameters ----
 
 #-- Mixture linear
+
 para_lr_linear = 0.001
 para_n_epoch_linear = 300
 para_batch_size_linear = 64
@@ -54,6 +105,25 @@ para_l2_linear = 0.001
 para_y_log = False
 para_pred_exp = False
 
+para_loss_type = str(sys.argv[2])
+#'lk'
+para_distr_type = str(sys.argv[3])
+#'log'
+
+if len(np.shape(xtr_distr)) > 2:
+    para_bool_bilinear = True
+    para_order_distr = len(xtr_distr[0][0])
+    para_order_steps = len(xtr_distr[0])
+    
+    print '     !! Time-first order !! '
+    
+else:
+    para_bool_bilinear = False
+    para_order_distr = len(xtr_distr[0])
+    para_order_steps = 0
+    
+    print '     !! Flattened features !! '
+    
 '''
 # -- Mixture MLP 
 # representability
@@ -87,17 +157,16 @@ para_model_check = 10
 
 '''
 
-# ---- training and evalution function ----
+# ---- main process ----
+
+tmp_test_err = []
+
+if bool_train == True:
     
-def train_eval_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):   
-    
-    tmp_test_err = []
-            
-    # stabilize the network
-    np.random.seed(1)
-    tf.set_random_seed(1)
-        
     with tf.Session() as sess:
+        
+        # stabilize the network
+        tf.set_random_seed(1)
         
         if method == 'linear':
             clf = mixture_linear_lk(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
@@ -146,14 +215,17 @@ def train_eval_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
         else:
             print "     [ERROR] Need to specify a model"
             
+    
         # initialize the network                          
         clf.train_ini()
         
         total_cnt   = np.shape(xtrain)[0]
         total_batch = int(total_cnt/para_batch_size)
         total_idx   = range(total_cnt)
+       
     
         #print '????', clf.test_batch(xtr_v, xtr_distr, ytrain, para_keep_prob)
+        
         
         #   begin training epochs
         for epoch in range(para_n_epoch):
@@ -227,12 +299,13 @@ def train_eval_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
             
                 _ = clf.train_batch( batch_v, batch_distr, batch_y, para_keep_prob )
             
-            #print "epoch: ", epoch
+            print "epoch: ", epoch
                 
         print "Model Re-training Finished!"
         
-        
+        #?
         py = clf.predict(xts_v, xts_distr, para_keep_prob)
+        
         tmp = np.concatenate( [np.expand_dims(ytest, -1), np.transpose(py, [1, 0])], 1 )
         np.savetxt("../bt_results/res/pytest_mix.txt", tmp, delimiter=',')
         
@@ -247,147 +320,11 @@ def train_eval_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
         np.savetxt("../bt_results/res/gate_train.txt", gates, delimiter=',')
         
         # collect the values of all optimized parameters
-        if train_mode == 'oneshot':
-            print 'prediction \n', clf.collect_coeff_values("pre")
-            print 'variance \n', clf.collect_coeff_values("sig")
-            print 'gate \n', clf.collect_coeff_values("gate")
-            
+        print 'prediction \n', clf.collect_coeff_values("pre")
+        print 'variance \n', clf.collect_coeff_values("sig")
+        print 'gate \n', clf.collect_coeff_values("gate")
         
-        return min(tmp_test_err, key = lambda x:x[2])[2]
-        
-        
-def preprocess_feature_mixture(xtrain, xtest):
-    
-    # split training and testing data into three feature groups      
-    xtr_vol =   np.asarray( [i[0] for i in xtrain] )
-    xtr_feature = np.asarray( [i[1] for i in xtrain] )
-
-    xts_vol =   np.asarray( [i[0] for i in xtest] )
-    xts_feature = np.asarray( [i[1] for i in xtest] )
-
-    # !! IMPORTANT: feature normalization
-
-    xts = conti_normalization_test_dta(  xts_vol, xtr_vol )
-    xtr = conti_normalization_train_dta( xtr_vol )
-
-    xts_exter = conti_normalization_test_dta(  xts_feature, xtr_feature )
-    xtr_exter = conti_normalization_train_dta( xtr_feature )
-    
-    return xtr, xtr_exter, xts, xts_exter
-    
-    
-# ---- main process ----  
-
-if train_mode == 'oneshot':
-    
-    # result log
-    res_file    = "../bt_results/res/mix.txt"
-    model_file = '../bt_results/model/mix'
-    
-    # Load pre-processed training and testing data
-    file_postfix = "v_minu_mix"
-    xtrain = np.load("../dataset/bitcoin/training_data/xtrain_"+file_postfix+".dat")
-    xtest  = np.load("../dataset/bitcoin/training_data/xtest_" +file_postfix+".dat")
-    ytrain = np.load("../dataset/bitcoin/training_data/ytrain_"+file_postfix+".dat")
-    ytest  = np.load("../dataset/bitcoin/training_data/ytest_" +file_postfix+".dat")
-    print np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
-    
-    # extract different groups of features
-    xtr, xtr_exter, xts, xts_exter = preprocess_feature_mixture(xtrain, xtest)
-    
-    print '--- Start one-shot training: '
-    print np.shape(xtr), np.shape(xtr_exter)
-    print np.shape(xts), np.shape(xts_exter)
-    
-    # fixed parameters
-    para_order_v = len(xtr[0])
-    
-    if len(np.shape(xtr_exter)) > 2:
-        para_bool_bilinear = True
-        para_order_distr = len(xtr_distr[0][0])
-        para_order_steps = len(xtr_distr[0])
-        print '     !! Time-first order !! '
-
-    else:
-        para_bool_bilinear = False
-        para_order_distr = len(xtr_distr[0])
-        para_order_steps = 0
-        print '     !! Flattened features !! '
-    
-    train_eval_mixture( xtr, xtr_exter, ytrain, xts, xts_exter, ytest ) 
-    
-    
-elif train_mode == 'roll' or 'incre':
-    
-    error_inter = []
-    
-    # result logs
-    res_file   = "../bt_results/res/mix_" + train_mode + ".txt"
-    model_file = "../bt_results/model/mix_" + train_mode
-    
-    # load raw feature and target data
-    features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat")
-    rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat")
-    all_loc_hour = np.load("../dataset/bitcoin/loc_hour.dat")
-    print '--- Start the ' + train_mode + ' training: \n', np.shape(features_minu), np.shape(rvol_hour)
-    
-    # prepare the set of pairs of features and targets
-    x, y, var_explain = prepare_feature_target( features_minu, rvol_hour, all_loc_hour, \
-                                                        para_order_minu, para_order_hour, bool_feature_selection )
-    
-    # set up training and evaluation interval 
-    interval_len = 30*24
-    interval_num = int(len(y)/interval_len)
-    print np.shape(x), np.shape(y), interval_len, interval_num
-    
-    # the main loop
-    for i in range(2, interval_num+1):
-        
-        if train_mode == 'roll':
-            tmp_x = x[(i-2)*interval_len: i*interval_len]
-            tmp_y = y[(i-2)*interval_len: i*interval_len]
-            para_train_split_ratio = 0.5
-            
-        elif train_mode == 'incre':
-            tmp_x = x[ : i*interval_len]
-            tmp_y = y[ : i*interval_len]
-            para_train_split_ratio = (len(tmp_x) - interval_len)/len(tmp_x)
-            
-        else:
-            print '[ERROR] training mode'
-        
-        # process the data within the current interval to get training and testing data
-        if para_bool_bilinear == True:
-            xtrain, ytrain, xtest, ytest = training_testing_mixture_rnn(tmp_x, tmp_y, para_train_split_ratio)
-        else:
-            xtrain, ytrain, xtest, ytest = training_testing_mixture_mlp(tmp_x, tmp_y, para_train_split_ratio)
-        
-        xtr, xtr_exter, xts, xts_exter = preprocess_feature_mixture(xtrain, xtest)
-        
-        # training and testing data ready
-        print '\n In processing of interval ', i-1, '\n'
-        print np.shape(xtr), np.shape(xtr_exter)
-        print np.shape(xts), np.shape(xts_exter)
-        
-        # parameter set-up
-        para_order_v = para_order_hour
-        if para_bool_bilinear == True:
-            para_order_distr = len(xtr_exter[0][0])
-            para_order_steps = len(xtr_exter[0])
-            print '     !! Time-first order !! '
-
-        elif para_bool_bilinear = False:
-            para_order_distr = len(xtr_exter[0])
-            para_order_steps = 0
-            print '     !! Flattened features !! '
-        else:
-            print '[ERROR]  bi-linear '
-        
-        # training begins
-        tmp_errors = train_eval_mixture( xtr, xtr_exter, ytrain, xts, xts_exter, ytest )
-        error_inter.append(tmp_errors)
-        
-    print error_inter
-    
 else:
-    print '[ERROR] training mode'
+    
+    print '    [ERROR] training mode'
+    

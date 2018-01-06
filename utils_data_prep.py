@@ -271,7 +271,7 @@ def training_testing_plain_regression(x, y, train_split_ratio):
     xtest  = x[tmp_split:]
     
     # feature normalization 
-    xtest = conti_normalization_test_dta(  xtest, xtrain )
+    xtest = conti_normalization_test_dta( xtest, xtrain )
     xtrain= conti_normalization_train_dta( xtrain )
     
     return xtrain, y[:tmp_split], xtest, y[tmp_split:]
