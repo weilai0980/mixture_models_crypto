@@ -1,7 +1,5 @@
 #!/usr/bin/python
 
-from utils_libs import *
-
 import gzip
 import os
 import tempfile
@@ -23,9 +21,8 @@ import numbers
 from tensorflow.python.ops import rnn_cell_impl
 from tensorflow.python.ops.rnn_cell_impl import * 
 
-
-_BIAS_VARIABLE_NAME = "bias"
-_WEIGHTS_VARIABLE_NAME = "kernel"
+# local packages
+from utils_libs import *
 
 '''
 norm:

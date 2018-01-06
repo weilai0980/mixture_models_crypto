@@ -1,14 +1,12 @@
 #!/usr/bin/python
 
-from utils_libs import *
-from regression_models import *
+import sys
+import os
 
 # local packages
 from utils_libs import *
 from utils_data_prep import *
-
-import sys
-import os
+from regression_models import *
 
 # --- model and training log set-up ---
 result_file = "../bt_results/res/rolling/reg_v_minu.txt"
@@ -94,14 +92,14 @@ if train_mode == 'oneshot':
     
 elif train_mode == 'roll' or 'incre':
     
-    # log for predictions
-    file_path = "../bt_results/res/rolling/"
     
-    # parameter set-up for preparing trainning and testing data
+    # ---- parameter set-up for preparing trainning and testing data ----
     para_order_minu = 30
     para_order_hour = 16
     bool_feature_selection = False
-
+    # ----
+    
+    
     # load raw feature data
     features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat")
     rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat")

@@ -30,7 +30,7 @@ train_mode = str(sys.argv[4])
 
 # ---- common parameters ----
 
-# txt file to record errors in training process 
+# log files for training process 
 training_log  = "../bt_results/res/mix_train_log.txt"
 # initialize the log
 with open(training_log, "w") as text_file:
@@ -42,6 +42,8 @@ para_order_hour = 16
 bool_feature_selection = False
 
 para_bool_bilinear = True
+
+
 
 # ---- Approach specific parameters ----
 
@@ -89,7 +91,7 @@ para_model_check = 10
 
 # ---- training and evalution function ----
     
-def train_eval_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):   
+def train_eval_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest, file_add ):   
     
     tmp_test_err = []
             
@@ -186,18 +188,13 @@ def train_eval_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
             # record for re-tratin the model 
             tmp_test_err.append( [epoch, sqrt(tmp_train_acc[0]), sqrt(tmp_test_acc[0]), tmpc] )
             
-            print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, sqrt(tmp_train_acc[0]), tmp_train_acc[1],\
-            sqrt(tmp_test_acc[0]), tmp_test_acc[1] 
+            if train_mode == 'oneshot':
+                print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, sqrt(tmp_train_acc[0]), tmp_train_acc[1],\
+                sqrt(tmp_test_acc[0]), tmp_test_acc[1] 
             
             
         print "Optimization Finished!"
         
-        # save overall errors
-        with open(res_file, "a") as text_file:
-            text_file.write( "Mixture %s  %s %s %s : %s  \n"%(method, para_loss_type, para_distr_type, 
-                                                              'bi-linear' if para_bool_bilinear else 'linear', \
-                                                           str(min(tmp_test_err, key = lambda x:x[2])) )) 
-         
         
         # training the model at the best parameter above
         best_epoch = min(tmp_test_err, key = lambda x:x[2])[0]
@@ -232,28 +229,35 @@ def train_eval_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
         print "Model Re-training Finished!"
         
         
-        py = clf.predict(xts_v, xts_distr, para_keep_prob)
+        py_test = clf.predict(xts_v, xts_distr, para_keep_prob)
         tmp = np.concatenate( [np.expand_dims(ytest, -1), np.transpose(py, [1, 0])], 1 )
-        np.savetxt("../bt_results/res/pytest_mix.txt", tmp, delimiter=',')
+        np.savetxt( file_add + "pytest_mix.txt", tmp, delimiter=',')
         
-        py = clf.predict(xtr_v, xtr_distr, para_keep_prob)
+        py_train = clf.predict(xtr_v, xtr_distr, para_keep_prob)
         tmp = np.concatenate( [np.expand_dims(ytrain, -1), np.transpose(py, [1, 0])], 1 )
-        np.savetxt("../bt_results/res/pytrain_mix.txt", tmp, delimiter=',')
+        np.savetxt( file_add + "pytrain_mix.txt", tmp, delimiter=',')
         
-        gates_hat = clf.predict_gates(xts_v, xts_distr, para_keep_prob)
-        np.savetxt("../bt_results/res/gate_test.txt", gates_hat, delimiter=',')
+        gates_test = clf.predict_gates(xts_v, xts_distr, para_keep_prob)
+        np.savetxt( file_add + gate_test.txt", gates, delimiter=',')
         
-        gates = clf.predict_gates(xtr_v, xtr_distr, para_keep_prob)
-        np.savetxt("../bt_results/res/gate_train.txt", gates, delimiter=',')
+        gates_train = clf.predict_gates(xtr_v, xtr_distr, para_keep_prob)
+        np.savetxt( file_add + res/gate_train.txt", gates, delimiter=',')
         
         # collect the values of all optimized parameters
         if train_mode == 'oneshot':
+                   
             print 'prediction \n', clf.collect_coeff_values("pre")
             print 'variance \n', clf.collect_coeff_values("sig")
             print 'gate \n', clf.collect_coeff_values("gate")
             
+            # save overall errors
+            with open(res_file, "a") as text_file:
+                text_file.write( "Mixture %s  %s %s %s : %s  \n"%(method, para_loss_type, para_distr_type, 
+                                                              'bi-linear' if para_bool_bilinear else 'linear', \
+                                                           str(min(tmp_test_err, key = lambda x:x[2])) )) 
+            
         
-        return min(tmp_test_err, key = lambda x:x[2])[2]
+        return min(tmp_test_err, key = lambda x:x[2])[2], py_train, py_test, gates_train, gates_test
         
         
 def preprocess_feature_mixture(xtrain, xtest):
@@ -322,8 +326,8 @@ elif train_mode == 'roll' or 'incre':
     error_inter = []
     
     # result logs
-    res_file   = "../bt_results/res/mix_" + train_mode + ".txt"
-    model_file = "../bt_results/model/mix_" + train_mode
+    res_file   = "../bt_results/res/rolling/mix.txt"
+    model_file = "../bt_results/model/mix_"
     
     # load raw feature and target data
     features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat")
@@ -342,6 +346,16 @@ elif train_mode == 'roll' or 'incre':
     
     # the main loop
     for i in range(2, interval_num+1):
+        
+        
+        # log for predictions in each interval
+        file_path = "../bt_results/res/rolling/" + str(i-1) + "_"
+        
+        print '\n --- In processing of interval ', i-1, ' --- \n'
+        with open(res_file, "a") as text_file:
+            text_file.write( "Interval %d :\n" %(i-1) )
+        
+        
         
         if train_mode == 'roll':
             tmp_x = x[(i-2)*interval_len: i*interval_len]
