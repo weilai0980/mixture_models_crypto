@@ -8,17 +8,25 @@ from utils_libs import *
 from utils_data_prep import *
 from regression_models import *
 
-# --- model and training log set-up ---
+# ---- model and training log set-up ----
 result_file = "../bt_results/res/rolling/reg_v_minu.txt"
 model_file = "../bt_results/model/v_minu_inter"
 bool_clf = False
+
+# ONLY USED FOR ROLLING AND EVALUATION
+# ---- parameter set-up for preparing trainning and testing data ----
+para_order_minu = 30
+para_order_hour = 16
+bool_feature_selection = False
+bool_add_feature = False
+# ----
 
 # clean the log
 #with open(result_file, "w") as text_file:
 #    text_file.close()
 
 load_file_postfix = "v_minu_reg"
-model_list = ['ridge', 'lasso']
+model_list = ['gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge']
 # 'gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge', 'lasso'
 
 def train_eval_models( xtrain, ytrain, xtest, ytest ):
@@ -36,7 +44,7 @@ def train_eval_models( xtrain, ytrain, xtest, ytest ):
     # XGBoosted extreme gradient boosted
     tmperr = xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, 0, result_file, model_file + '_xgt.sav', file_path)
     best_err_ts.append(tmperr)
-    
+   
     # log transformation of y
     log_ytrain = []
     #log(ytrain+1e-5)
@@ -61,10 +69,11 @@ def train_eval_models( xtrain, ytrain, xtest, ytest ):
     best_err_ts.append(tmperr)
     
     # Lasso 
-    tmperr = lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_lasso.sav', log_ytrain, file_path)
-    best_err_ts.append(tmperr)
+    #tmperr = lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_lasso.sav', log_ytrain, file_path)
+    #best_err_ts.append(tmperr)
     
     return best_err_ts
+
 
 # --- main process ---
 # oneshot, roll, incre
@@ -93,13 +102,6 @@ if train_mode == 'oneshot':
 elif train_mode == 'roll' or 'incre':
     
     
-    # ---- parameter set-up for preparing trainning and testing data ----
-    para_order_minu = 30
-    para_order_hour = 16
-    bool_feature_selection = False
-    # ----
-    
-    
     # load raw feature data
     features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat")
     rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat")
@@ -107,15 +109,21 @@ elif train_mode == 'roll' or 'incre':
     print '--- Start the ' + train_mode + ' training: \n', np.shape(features_minu), np.shape(rvol_hour)
     
     # prepare pairs of features and targets
-    x, y, var_explain = prepare_feature_target( features_minu, rvol_hour, all_loc_hour, \
+    if bool_add_feature == True:
+        x, y, var_explain = prepare_feature_target( features_minu, rvol_hour, all_loc_hour, \
                                                         para_order_minu, para_order_hour, bool_feature_selection )
+    else:
+        x, y, var_explain = prepare_feature_target( [], rvol_hour, all_loc_hour, \
+                                                        para_order_minu, para_order_hour, bool_feature_selection )
+        
     # set up the interval parameters
     interval_len = 30*24
     interval_num = int(len(y)/interval_len)
     print np.shape(x), np.shape(y), interval_len, interval_num
-
+    roll_len = 2
+    
     # the main loop 
-    for i in range(2, interval_num+1):
+    for i in range(roll_len + 1, interval_num+1):
         
         # log for predictions in each interval
         file_path = "../bt_results/res/rolling/" + str(i-1) + "_"
@@ -125,14 +133,14 @@ elif train_mode == 'roll' or 'incre':
             text_file.write( "Interval %d :\n" %(i-1) )
         
         if train_mode == 'roll':
-            tmp_x = x[(i-2)*interval_len: i*interval_len]
-            tmp_y = y[(i-2)*interval_len: i*interval_len]
-            para_train_split_ratio = 0.5
+            tmp_x = x[(i-roll_len-1)*interval_len: i*interval_len]
+            tmp_y = y[(i-roll_len-1)*interval_len: i*interval_len]
+            para_train_split_ratio = 1.0*(len(tmp_x) - interval_len)/len(tmp_x)
             
         elif train_mode == 'incre':
             tmp_x = x[ : i*interval_len]
             tmp_y = y[ : i*interval_len]
-            para_train_split_ratio = (len(tmp_x) - interval_len)/len(tmp_x)
+            para_train_split_ratio = 1.0*(len(tmp_x) - interval_len)/len(tmp_x)
             
         else:
             print '[ERROR] training mode'
@@ -141,7 +149,16 @@ elif train_mode == 'roll' or 'incre':
         xtrain, ytrain, xtest, ytest = training_testing_plain_regression(tmp_x, tmp_y, para_train_split_ratio)
         print np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
         
+        '''
+        # dump training and testing data in one interval to disk 
+        np.asarray(xtrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtrain_reg.dat")
+        np.asarray(xtest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtest_reg.dat")
+        np.asarray(ytrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytrain_reg.dat")
+        np.asarray(ytest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytest_reg.dat")
+        '''
+        
         # train and evaluate models
+        # arguments: numpy array 
         tmp_errors = train_eval_models( np.asarray(xtrain), np.asarray(ytrain), np.asarray(xtest), np.asarray(ytest) )
         
         print list(zip(model_list, tmp_errors))

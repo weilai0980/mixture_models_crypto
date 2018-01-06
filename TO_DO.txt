@@ -61,23 +61,44 @@ lasso bilinear
 loss function
 
 MAPE error 
----- To Do ----
-
-reload all data and record month location 
-
-https://aksarkar.github.io/nwas/example.html
 
 result analysis: visualize each expert prediction 
 
 Seed the random number generator
 
+Training scheme:
+  Rolling and incremental training / testing 
 
+test first, exponetial regression, log normal regression
+
+---- To Do ----
+
+Rolling evalution on statistis baselines
+
+Experiments steps:
+  
+  two month data and then incremental data:
+    
+    only volatility model
+    regression on volatility + features 
+    regression on volatility + feature selection
+    regression on mixture
+    
+  performance w.r.t. lag order of hourly volatility and minute features
+  
+  
+  
+
+reload all data and record month location 
+
+https://aksarkar.github.io/nwas/example.html
+
+confidence interval 
 
 relation between mixture weigth and volatility up/down
  
 pattern 
 
-confidence interval 
 
 Regularization:
   Automatic Relevance Determination
@@ -105,8 +126,6 @@ Evaluation process:
    
    mixture model 
 
-Training scheme:
-  Rolling and incremental training / testing 
 
 Mixture:
   
@@ -122,8 +141,6 @@ Baseline:
   moving average and filter
   aggregate to the same grnularity, gaussian process 
   
-
-
 
 Bayesian:
   mixture regression 
@@ -150,7 +167,7 @@ Neural Mixture:
    activation on the last layer
    bias in _linear function
 
-test first, exponetial regression, log normal regression
+
 
 variance reduction in the estimator for sampling 
 

@@ -261,6 +261,7 @@ def xgt_n_depth( lr, max_depth, max_round, xtrain, ytrain, xtest, ytest, bool_cl
     tmp_err = 0.0 if bool_clf else np.inf 
     
     for depth_trial in range(2, max_depth):
+        
         for num_round_trial in range(2, max_round):
 
             param['max_depth'] = depth_trial
@@ -370,6 +371,10 @@ def xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, num_class, result
                     [0.0001, 0.001, 0.01, 0.1, 1, 10, 100], bool_clf, num_class)
     print " l2, RMSE:", train_err1, l2_err
 
+    # save overall errors
+    with open(result_file, "a") as text_file:
+        text_file.write( "XG-boosted %f, %s, %f, %s\n" %(train_err0, str(n_depth_err), train_err1, str(l2_err)) )
+    
     
     # specific for XGBoosted
     xg_test  = xgb.DMatrix(xtest,  label = ytest)
@@ -405,9 +410,7 @@ def xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, num_class, result
         # return the least validation error 
         return l2_err[1]
     
-    # save overall errors
-    with open(result_file, "a") as text_file:
-        text_file.write( "XG-boosted %f, %s, %f, %s\n" %(train_err0, str(l2_err), train_err1, str(n_depth_err)) )
+    
         
 #  def xgt_l1 for very high dimensional features    
     
@@ -475,7 +478,8 @@ def rf_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, result_file, model
     # save overall errors
     with open(result_file, "a") as text_file:
         text_file.write( "Random forest %f, %s \n" %(train_err, str(n_err)) )
-        
+    
+    
     # save testing resutls under the best model
     py = model.predict( xtest )
     np.savetxt(pred_file + "pytest_rf.txt", zip(ytest, py), delimiter=',')
@@ -600,8 +604,8 @@ def bayesian_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model
     py = bayesian_reg.predict( xtrain )
     np.savetxt(pred_file + "pytrain_bayes.txt", zip(ytrain, py), delimiter=',')
     
-    # return the least validation error 
-    return err_min[3]
+    # return the lowest validation error 
+    return tmp_ts
     
         
 # ++++ Ridge regression ++++

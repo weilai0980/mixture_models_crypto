@@ -180,30 +180,33 @@ class mixture_linear_lk():
         # --- prediction of individual models
 
         # models on individual feature groups
-        pre_v, regu_v_pre = linear_predict(self.v_auto, order_v, 'pre_v', True)
+        mean_v, regu_v_mean = linear_predict(self.v_auto, order_v, 'mean_v', True)
         
         if bool_bilinear == True:
-            pre_distr, regu_d_pre = bilinear(self.distr, [order_steps, order_distr], 'pre_distr', True)
+            mean_distr, regu_d_mean = bilinear(self.distr, [order_steps, order_distr], 'mean_distr', True)
         
         else:
-            pre_distr, regu_d_pre = linear_predict(self.distr, order_distr, 'pre_distr', True)
+            mean_distr, regu_d_mean = linear_predict(self.distr, order_distr, 'mean_distr', True)
 
-        # concatenate individual predictions 
-        pre = tf.stack( [pre_v, pre_distr], 1 )
+        # concatenate individual means 
+        mean_stack = tf.stack( [mean_v, mean_distr], 1 )
         
         
         # --- variance of individual models
         
         # variance depedent on features 
-        inv_varv, regu_v_var = linear(self.v_auto, order_v, 'sig_v', True)
+        varv, regu_v_var = linear(self.v_auto, order_v, 'sig_v', True)
         
         if bool_bilinear == True:
-            inv_vardistr, regu_d_var = linear(tmp_d, order_steps*order_distr, 'sig_distr', True)
+            vardistr, regu_d_var = linear(tmp_d, order_steps*order_distr, 'sig_distr', True)
         else:
-            inv_vardistr, regu_d_var = linear(self.distr, order_distr, 'sig_distr', True)
+            vardistr, regu_d_var = linear(self.distr, order_distr, 'sig_distr', True)
             
-        var_v = tf.square(inv_varv)
-        var_d = tf.square(inv_vardistr)
+        var_v = tf.square(varv)
+        var_d = tf.square(vardistr)
+        
+        # concatenate individual variance 
+        var_stack = tf.stack( [var_v, var_d], 1 )
         
         # variance constant for each expert
         #varv =    tf.Variable(tf.random_normal([1,], stddev = math.sqrt(2.0/float(1.0))) )
@@ -249,14 +252,14 @@ class mixture_linear_lk():
         # --- negative log likelihood 
         
         if distr_type == 'norm':
-            tmpllk_v = tf.exp(-0.5*tf.square(self.y - pre_v)/(var_v+1e-5))/(2.0*np.pi*(var_v+1e-5))**0.5
-            tmpllk_d = tf.exp(-0.5*tf.square(self.y - pre_distr)/(var_d+1e-5))/(2.0*np.pi*(var_d+1e-5))**0.5
+            tmpllk_v = tf.exp(-0.5*tf.square(self.y - mean_v)/(var_v+1e-5))/(2.0*np.pi*(var_v+1e-5))**0.5
+            tmpllk_d = tf.exp(-0.5*tf.square(self.y - mean_distr)/(var_d+1e-5))/(2.0*np.pi*(var_d+1e-5))**0.5
             
         elif distr_type == 'log':
             
-            tmpllk_v = tf.exp(-0.5*tf.square(tf.log(self.y+1e-10) - pre_v)/(var_v+1e-10))/(2.0*np.pi*(var_v+1e-10))**0.5/(self.y+1e-10)
+            tmpllk_v = tf.exp(-0.5*tf.square(tf.log(self.y+1e-10) - mean_v)/(var_v+1e-10))/(2.0*np.pi*(var_v+1e-10))**0.5/(self.y+1e-10)
             
-            tmpllk_d = tf.exp(-0.5*tf.square(tf.log(self.y+1e-10) - pre_distr)/(var_d+1e-10))/(2.0*np.pi*(var_d+1e-10))**0.5/(self.y+1e-10)
+            tmpllk_d = tf.exp(-0.5*tf.square(tf.log(self.y+1e-10) - mean_distr)/(var_d+1e-10))/(2.0*np.pi*(var_d+1e-10))**0.5/(self.y+1e-10)
         
         else:
             print '[ERROR] distribution type'
@@ -266,6 +269,7 @@ class mixture_linear_lk():
         
         # --- regularization
         
+        # smoothness 
         logit_v_diff = logit_v[1:]-logit_v[:-1]
         logit_d_diff = logit_d[1:]-logit_d[:-1]
         
@@ -274,39 +278,49 @@ class mixture_linear_lk():
         
         regu_gate_smooth = tf_var(logit_v_diff) + tf_var(logit_d_diff)  
         
-        
+        # gate diversity
         gate_diff = logit_v - logit_d
         regu_gate_diver = tf_var(gate_diff)
         
-        pre_diff = pre_v - pre_distr
-        regu_pre_diver = tf_var(pre_diff)
+        # prediction diversity
+        mean_diff = mean_v - mean_distr
+        regu_pre_diver = tf_var(mean_diff)
+        
+        # positive mean 
+        # TO DO 
         
         
         if bool_bilinear == True:
             
             if loss_type == 'sq' and distr_type == 'norm':
                 
-                self.regu = 0.01*(regu_v_pre) + 0.001*(regu_d_pre[0]) + 0.001*(regu_d_pre[1])+\
+                self.regu = 0.01*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
                             0.0001*(regu_v_gate) + 0.0001*(regu_d_gate[0] + regu_d_gate[1])\
                             #- 0.0001*regu_pre_diver\
                             #- 0.0001*regu_gate_diver
             
             elif loss_type == 'lk' and distr_type == 'norm':
                 
-                self.regu = 0.01*(regu_v_pre) + 0.001*(regu_d_pre[0]) + 0.00001*(regu_d_pre[1])+\
-                        0.001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
+                # for roll
+                self.regu = 0.01*(regu_v_mean) + 0.01*(regu_d_mean[0]) + 0.01*(regu_d_mean[1])+\
+                        0.001*(regu_v_gate) + 0.001*(regu_d_gate[0] + regu_d_gate[1])\
                         + 0.001*(regu_v_var + regu_d_var)
+                
+                # for one-shot
+                #self.regu = 0.01*(regu_v_pre) + 0.001*(regu_d_pre[0]) + 0.00001*(regu_d_pre[1])+\
+                #        0.001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
+                #        + 0.001*(regu_v_var + regu_d_var)
                         
                         
             elif loss_type == 'sq' and distr_type == 'log':
                 
-                self.regu = 0.01*(regu_v_pre) + 0.001*(regu_d_pre[0]) + 0.00001*(regu_d_pre[1])+\
+                self.regu = 0.01*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.00001*(regu_d_mean[1])+\
                         0.001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])
             
             
             elif loss_type == 'lk' and distr_type == 'log':
                 
-                self.regu = 0.1*(regu_v_pre) + 0.01*(regu_d_pre[0]) + 0.01*(regu_d_pre[1])+\
+                self.regu = 0.1*(regu_v_mean) + 0.01*(regu_d_mean[0]) + 0.01*(regu_d_mean[1])+\
                         0.0001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])
                 
             
@@ -317,7 +331,7 @@ class mixture_linear_lk():
             
             if loss_type == 'sq' and distr_type == 'norm':
                 
-                self.regu = 0.01*regu_v_pre + 0.01*regu_d_pre\
+                self.regu = 0.01*regu_v_mean + 0.01*regu_d_mean\
                           + 0.0001*(regu_v_gate + regu_d_gate)\
                           - 0.0001*regu_pre_diver\
                           - 0.001*regu_gate_diver
@@ -325,43 +339,55 @@ class mixture_linear_lk():
             
             elif loss_type == 'lk' and distr_type == 'norm':
                 
-                self.regu = 0.01*regu_v_pre + 0.0001*regu_d_pre + 0.0001*(regu_v_gate + regu_d_gate)
+                self.regu = 0.01*regu_v_mean + 0.0001*regu_d_mean + 0.0001*(regu_v_gate + regu_d_gate)
                         
             elif loss_type == 'sq' and distr_type == 'log':
                 
-                self.regu = 0.01*regu_v_pre + 0.0001*regu_d_pre + 0.0001*(regu_v_gate + regu_d_gate)
+                self.regu = 0.01*regu_v_mean + 0.0001*regu_d_mean + 0.0001*(regu_v_gate + regu_d_gate)
             
             elif loss_type == 'lk' and distr_type == 'log':
                 
-                self.regu = 0.001*regu_v_pre + 0.0001*regu_d_pre + 0.0001*(regu_v_gate + regu_d_gate)
+                self.regu = 0.001*regu_v_mean + 0.0001*regu_d_mean + 0.0001*(regu_v_gate + regu_d_gate)
             
             else:
                 print '[ERROR] loss type'
         
         
-        # --- mixture prediction
+        # --- mixture prediction, mean and variance
         
         if distr_type == 'norm':
             
-            self.y_hat = tf.reduce_sum(tf.multiply(pre, self.gates), 1)
+            # mean and prediction
+            self.y_hat = tf.reduce_sum(tf.multiply(mean_stack, self.gates), 1)
             
-            self.pre_v = pre_v
-            self.pre_d = pre_distr
+            self.pre_v = mean_v
+            self.pre_d = mean_distr
+            
+            # variance 
+            sq_mean_stack =  var_stack - tf.square(mean_stack)
+            mix_sq_mean = tf.reduce_sum(tf.multiply(mean_sq_stack, self.gates), 1)
+            
+            self.var_hat = mix_sq_mean - tf.square(self.y_hat)
+            
         
         elif distr_type == 'log':
             
-            self.y_hat = tf.reduce_sum(tf.multiply(tf.exp(pre), self.gates), 1)
+            # mean and prediction
+            self.y_hat = tf.reduce_sum(tf.multiply(tf.exp(mean_stack), self.gates), 1)
             
-            self.pre_v = tf.exp(pre_v)
-            self.pre_d = tf.exp(pre_distr)
+            self.pre_v = tf.exp(mean_v)
+            self.pre_d = tf.exp(mean_distr)
             
-            self.orig = pre_v
+            self.orig = mean_v
+            
+            # variance 
+            # TO DO
             
         else:
             print '[ERROR] distribution type'
         
         
-        # --- mixture errors
+        # --- mixture prediction errors
         
         # MSE
         self.err = tf.losses.mean_squared_error( self.y, self.y_hat )
@@ -430,21 +456,21 @@ class mixture_linear_lk():
     def inference(self, v_test, distr_test, y_test, keep_prob):
         
         return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test, \
-                                                      self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
+                                                    self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     
     #   predict givn testing data
     def predict(self, v_test, distr_test, keep_prob):
         
-        return self.sess.run( [self.y_hat, self.pre_v, self.pre_d], feed_dict = {self.v_auto:v_test,  \
+        return self.sess.run( [self.y_hat, self.pre_v, self.pre_d], feed_dict = {self.v_auto:v_test, \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     
     #   mixture gates givn testing data
     def predict_gates(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test,  \
+        return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test, \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
     def predict_logit(self, v_test, distr_test, keep_prob):
-        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test,  \
+        return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test, \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     # collect the optimized variable values
     def collect_coeff_values(self, vari_keyword):
