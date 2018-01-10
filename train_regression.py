@@ -13,12 +13,12 @@ result_file = "../bt_results/res/rolling/reg_v_minu.txt"
 model_file = "../bt_results/model/v_minu_inter"
 bool_clf = False
 
-# ONLY USED FOR ROLLING AND EVALUATION
+# ONLY USED FOR ROLLING EVALUATION
 # ---- parameter set-up for preparing trainning and testing data ----
 para_order_minu = 30
 para_order_hour = 16
-bool_feature_selection = False
-bool_add_feature = False
+bool_feature_selection = True
+bool_add_feature = True
 # ----
 
 # clean the log

@@ -77,14 +77,18 @@ Rolling evalution on statistis baselines
 
 Experiments steps:
   
-  two month data and then incremental data:
+  two month data 
     
-    only volatility model
-    regression on volatility + features 
-    regression on volatility + feature selection
-    regression on mixture
+    - only volatility model
+    - regression on volatility + features 
+    - regression on volatility + feature selection
+    - regression on mixture
     
-  performance w.r.t. lag order of hourly volatility and minute features
+    + result analysis pipeline
+    
+  incremental data
+  
+  performance w.r.t. lag order of hourly volatility and minute features, feature selection dim, backward interval 
   
   
   
