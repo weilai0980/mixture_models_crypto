@@ -92,9 +92,6 @@ para_model_check = 10
 
 '''
 
-# TO DO:
-# seperate training and validaiton training 
-
 # ---- training and evalution function ----
     
 def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):   
@@ -149,10 +146,10 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
             print "     [ERROR] Need to specify a model"
             
         # initialize the network
-        
         # reset the model
         clf.train_ini()
         
+        # set up training batch parameters
         total_cnt   = np.shape(xtrain)[0]
         total_batch = int(total_cnt/para_batch_size)
         total_idx   = range(total_cnt)
@@ -186,7 +183,7 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
             #?
             tmp_test_acc  = clf.inference(xts_v, xts_distr, ytest,  para_keep_prob) 
             
-            # record for re-tratin the model 
+            # record for re-tratining the model afterwards
             tmp_test_err.append( [epoch, sqrt(tmp_train_acc[0]), sqrt(tmp_test_acc[0]), tmpc] )
             
             print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, sqrt(tmp_train_acc[0]), tmp_train_acc[1],\
@@ -195,13 +192,14 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
             
         print "Optimization Finished!"
         
-        # training the model at the best parameter above
+        # the model at the best parameter above
         best_epoch = min(tmp_test_err, key = lambda x:x[2])[0]
         
         # reset the model
         clf.model_reset()
         clf.train_ini()
-        
+    
+    # clear the graph in the current session
     tf.reset_default_graph()
     sess = tf.InteractiveSession()
 
@@ -211,7 +209,7 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
 def validate_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest, file_addr, model_file, best_epoch ): 
     
     # stabilize the network by fixing the random seed
-    # fixing the seed will settle down all the random parameters over the entire routine 
+    # fixing the seed will settle down all the random parameters over the entire routine below
     np.random.seed(1)
     tf.set_random_seed(1)
     
@@ -322,6 +320,7 @@ def validate_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest, file_ad
         gates_train = clf.predict_gates(xtr_v, xtr_distr, para_keep_prob)
         np.savetxt( file_addr + "gate_train.txt", gates_train, delimiter=',')
         
+        
         # collect the values of all optimized parameters
         if train_mode == 'oneshot':
                    
@@ -339,10 +338,10 @@ def validate_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest, file_ad
             
         # reset the model 
         clf.model_reset()
+        
+    # clear the graph in the current session    
     tf.reset_default_graph()
     sess = tf.InteractiveSession()
-        
-    
         
         
 def preprocess_feature_mixture(xtrain, xtest):

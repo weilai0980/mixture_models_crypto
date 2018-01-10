@@ -71,9 +71,12 @@ Training scheme:
 
 test first, exponetial regression, log normal regression
 
+# seperate training and validaiton training 
+
 ---- To Do ----
 
 Rolling evalution on statistis baselines
+
 
 Experiments steps:
   
