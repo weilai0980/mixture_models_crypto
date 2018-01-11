@@ -20,6 +20,16 @@ from utils_data_prep import *
 from mixture import *
 
 
+# ONLY USED FOR ROLLING EVALUATION
+# ---- parameter set-up for preparing trainning and testing data ----
+para_order_minu = 30
+para_order_hour = 16
+bool_feature_selection = False
+
+para_bool_bilinear = True
+# ----
+
+
 print '--- Argument List:', str(sys.argv)
 method = str(sys.argv[1])
 # linear, mlp, rnn
@@ -39,13 +49,7 @@ with open(training_log, "w") as text_file:
     text_file.close()
 
 
-# ONLY USED FOR ROLLING EVALUATION
-# ---- parameter set-up for preparing trainning and testing data ----
-para_order_minu = 30
-para_order_hour = 16
-bool_feature_selection = False
 
-para_bool_bilinear = True
 
 
 # ---- Approach specific parameters ----
@@ -450,7 +454,6 @@ elif train_mode == 'roll' or 'incre':
         tf.reset_default_graph()
         sess = tf.InteractiveSession()
         
-        
         # log for predictions in each interval
         pred_file = "../bt_results/res/rolling/" + str(i-1) + "_"
         
@@ -458,7 +461,7 @@ elif train_mode == 'roll' or 'incre':
         with open(res_file, "a") as text_file:
             text_file.write( "Interval %d :\n" %(i-1) )
         
-        
+        # extract the data within the current time interval
         if train_mode == 'roll':
             tmp_x = x[(i-roll_len-1)*interval_len : i*interval_len]
             tmp_y = y[(i-roll_len-1)*interval_len : i*interval_len]
@@ -472,28 +475,21 @@ elif train_mode == 'roll' or 'incre':
         else:
             print '[ERROR] training mode'
             
-        print tmp_y[:20]
-        
-        
-        # shuffle training data
-        #tmpdata = zip(tmp_x, tmp_y)
-        #shuffle(tmpdata)
-        
-        #tmp_x = [k[0] for k in tmpdata]
-        #tmp_y = [k[1] for k in tmpdata]
-        #print np.shape(tmp_x), np.shape(tmp_y)
-        
-            
         # process the data within the current interval, flatten or 
         if para_bool_bilinear == True:
             xtrain, ytrain, xtest, ytest = training_testing_mixture_rnn(tmp_x, tmp_y, para_train_split_ratio)
         else:
             xtrain, ytrain, xtest, ytest = training_testing_mixture_mlp(tmp_x, tmp_y, para_train_split_ratio)
         
+        # dump training and testing data in one interval to disk 
+        np.asarray(xtrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtrain_mix.dat")
+        np.asarray(xtest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtest_mix.dat")
+        np.asarray(ytrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytrain_mix.dat")
+        np.asarray(ytest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytest_mix.dat")
         
-        # feature normalization READY
+        
+        # feature split, normalization READY
         xtr, xtr_exter, xts, xts_exter = preprocess_feature_mixture(xtrain, xtest)
-        
         print '\n In processing of interval ', i-1, '\n'
         print np.shape(xtr), np.shape(xtr_exter)
         print np.shape(xts), np.shape(xts_exter)
@@ -511,7 +507,8 @@ elif train_mode == 'roll' or 'incre':
             print '     !! Flattened features !! '
         else:
             print '[ERROR]  bi-linear '
-        
+            
+            
         # training begins
         # return lowest prediction errors and llk 
         best_epoch, tmp_error = train_mixture( xtr, xtr_exter, np.asarray(ytrain), xts, xts_exter, np.asarray(ytest) )

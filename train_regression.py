@@ -8,10 +8,6 @@ from utils_libs import *
 from utils_data_prep import *
 from regression_models import *
 
-# ---- model and training log set-up ----
-result_file = "../bt_results/res/rolling/reg_v_minu.txt"
-model_file = "../bt_results/model/v_minu_inter"
-bool_clf = False
 
 # ONLY USED FOR ROLLING EVALUATION
 # ---- parameter set-up for preparing trainning and testing data ----
@@ -20,6 +16,12 @@ para_order_hour = 16
 bool_feature_selection = True
 bool_add_feature = True
 # ----
+
+
+# ---- model and training log set-up ----
+result_file = "../bt_results/res/rolling/reg_v_minu.txt"
+model_file = "../bt_results/model/v_minu_inter"
+bool_clf = False
 
 # clean the log
 #with open(result_file, "w") as text_file:
@@ -145,10 +147,6 @@ elif train_mode == 'roll' or 'incre':
         else:
             print '[ERROR] training mode'
         
-        # split into training and testin data
-        xtrain, ytrain, xtest, ytest = training_testing_plain_regression(tmp_x, tmp_y, para_train_split_ratio)
-        print np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
-        
         '''
         # dump training and testing data in one interval to disk 
         np.asarray(xtrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtrain_reg.dat")
@@ -156,6 +154,12 @@ elif train_mode == 'roll' or 'incre':
         np.asarray(ytrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytrain_reg.dat")
         np.asarray(ytest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytest_reg.dat")
         '''
+        
+        # split into training and testin data, normalization
+        xtrain, ytrain, xtest, ytest = training_testing_plain_regression(tmp_x, tmp_y, para_train_split_ratio)
+        print np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
+        
+        
         
         # train and evaluate models
         # arguments: numpy array 

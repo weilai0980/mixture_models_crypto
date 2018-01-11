@@ -210,6 +210,8 @@ https://tradeblock.com/blog/bitcoin-trading-interpreting-order-books/
 
 -- Deep learning and attention
 
+A Neural Stochastic Volatility Model
+
 multi-head attention:  all you need is attention
 
 

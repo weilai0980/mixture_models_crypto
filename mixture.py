@@ -302,7 +302,7 @@ class mixture_linear_lk():
             elif loss_type == 'lk' and distr_type == 'norm':
                 
                 # for roll
-                self.regu = 0.01*(regu_v_mean) + 0.01*(regu_d_mean[0]) + 0.01*(regu_d_mean[1])+\
+                self.regu = 0.1*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
                         0.0001*(regu_v_gate) + 0.0001*(regu_d_gate[0] + regu_d_gate[1])\
                         + 0.001*(regu_v_var + regu_d_var)
                 
