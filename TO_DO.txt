@@ -73,6 +73,17 @@ test first, exponetial regression, log normal regression
 
 # seperate training and validaiton training 
 
+relation between mixture weigth and volatility up/down
+ 
+pattern 
+
+Evaluation process:
+   single volatility
+   volatility + order book
+   volatility + feature selection from order book 
+   
+mixture model 
+
 ---- To Do ----
 
 Rolling evalution on statistis baselines
@@ -94,17 +105,11 @@ Experiments steps:
   performance w.r.t. lag order of hourly volatility and minute features, feature selection dim, backward interval 
   
   
-  
-
 reload all data and record month location 
 
 https://aksarkar.github.io/nwas/example.html
 
 confidence interval 
-
-relation between mixture weigth and volatility up/down
- 
-pattern 
 
 
 Regularization:
@@ -125,14 +130,6 @@ Evaluation metric:
 
     Mixture
     
-
-Evaluation process:
-   single volatility
-   volatility + order book
-   volatility + feature selection from order book 
-   
-   mixture model 
-
 
 Mixture:
   

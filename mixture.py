@@ -269,7 +269,7 @@ class mixture_linear_lk():
         
         # --- regularization
         
-        # smoothness 
+        # gate smoothness 
         logit_v_diff = logit_v[1:]-logit_v[:-1]
         logit_d_diff = logit_d[1:]-logit_d[:-1]
         
@@ -282,12 +282,13 @@ class mixture_linear_lk():
         gate_diff = logit_v - logit_d
         regu_gate_diver = tf_var(gate_diff)
         
-        # prediction diversity
-        mean_diff = mean_v - mean_distr
-        regu_pre_diver = tf_var(mean_diff)
+        # mean diversity
+        mean_diff = mean_v - mean_v
+        #regu_mean_diver = tf.reduce_mean( (mean_v - self.y)*(mean_distr - self.y) )
+        regu_mean_diver = tf.reduce_mean( tf.maximum(0.0, (mean_v - self.y)*(mean_distr - self.y)) )
         
-        # positive mean 
-        # TO DO 
+        # mean positive  
+        regu_mean_pos = tf.reduce_sum( tf.maximum(0.0, -1.0*mean_v) + tf.maximum(0.0, -1.0*mean_distr) )
         
         
         if bool_bilinear == True:
@@ -302,9 +303,11 @@ class mixture_linear_lk():
             elif loss_type == 'lk' and distr_type == 'norm':
                 
                 # for roll
-                self.regu = 0.1*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
+                self.regu = 0.001*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
                         0.0001*(regu_v_gate) + 0.0001*(regu_d_gate[0] + regu_d_gate[1])\
-                        + 0.001*(regu_v_var + regu_d_var)
+                        + 0.001*(regu_v_var + regu_d_var)\
+                        + 0.001*regu_mean_pos\
+                        + 0.0001*regu_mean_diver
                 
                 # for one-shot
                 #self.regu = 0.01*(regu_v_pre) + 0.001*(regu_d_pre[0]) + 0.00001*(regu_d_pre[1])+\
@@ -387,7 +390,7 @@ class mixture_linear_lk():
             print '[ERROR] distribution type'
         
         
-        # --- mixture prediction errors
+        # --- errors of mixture prediction 
         
         # MSE
         self.err = tf.losses.mean_squared_error( self.y, self.y_hat )
@@ -419,16 +422,16 @@ class mixture_linear_lk():
         
         # loss
         if self.loss_type == 'sq':
-            self.lk_loss = self.err + self.regu
+            self.loss = self.err + self.regu
             
         elif self.loss_type == 'lk':
-            self.lk_loss = self.neg_logllk + self.regu
+            self.loss = self.neg_logllk + self.regu
         
         else:
             print '[ERROR] loss type'
         
         
-        self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.lk_loss)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.loss)
         
         self.init = tf.global_variables_initializer()
         self.sess.run(self.init)
