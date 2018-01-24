@@ -86,6 +86,48 @@ mixture model
 
 ---- To Do ----
 
+
+Evaluation:
+
+Baselines: prophet, gaussian process, nips temporal regularizer 
+
+post-effect:  volatility patten after different order book weights 
+
+nonstationariety test on weight sequence
+
+error test 
+
+MAE 
+
+SMAPE was used as a forecast error metric defined as
+|ŷ−y t |
+100
+n ×Σ n | y ˆ t |+|y t | /2.
+
+
+Mutual information for hyper-parameters selection 
+
+simple random walk and exponential weighted model
+
+
+hyper-parameters for the benchmark models were chosen
+
+the sensitivity of the model's performance with respect to the architecture of the 'Significance' network
+
+
+prediction distribution  A v.s. B 
+
+log-likelihood 
+
+Performance w.r.t. different data property, approach property
+
+relation reveald by the model
+
+Wilcoxon signed-rank test
+
+
+
+
 Rolling evalution on statistis baselines
 
 
@@ -211,7 +253,6 @@ A Neural Stochastic Volatility Model
 
 multi-head attention:  all you need is attention
 
-
 Outrageously large neural networks the sparsely gated mixture of expert layer
 
 Attention is all you need
@@ -234,61 +275,9 @@ Learning Factored Representations in a Deep Mixture of Experts
 
 Adaptive Feature Abstraction for Translating Video to Text
 
--- Statistical
-
-temporal features 
-
-Sparse Bilinear Logistic Regression
 
 
-bayesian mixture models for multivariate time series with an application to austrilian rainfall data
 
-paper Inferring The Latent Structure of Human Decision-Making from Raw
-
-4.3. Variance Reduction Policy gradients methods are notorious for suffering from high-variance gradients, since it is computationally expensive to obtain enough rollouts from the simulator to match the policy distribution. Therefore, we apply several variance-reduction techniques, such as replay buffer (Schaul et al., 2015) and baseline methods (Williams, 1992).
-
-ADVI: variational inference
-
-(2015)Probabilistic Dynamic Causal Model for Temporal
-
-A user-centric model of voting intention from Social Media
-
--- time series
-
-(2015)unsupervised feature learning from temporal data
-
-Extracting Interpretable Features for Early Classification on Time Series
-
-Structure-based Statistical Features and Multivariate Time Series Clustering
-
-
--- bitcoin
-
-Trading Bitcoin and Online Time Series Prediction
-
-Quantifying bid-ask spreads in the Chinese stock market using
-limit-order book data
-
-Order Book Characteristics and the Volume-Volatility Relation: Empirical Evidence from a Limit Order Market
-
-
----- Evaluation ----
-
-hyper-parameters for the benchmark models were chosen
-
-the sensitivity of the model's performance with respect to the architecture of the 'Significance' network
-
-rmse, 
-
-prediction distribution  A v.s. B 
-
-log-likelihood 
-
-Performance w.r.t. different data property, approach property
-
-relation reveald by the model
-
-Wilcoxon signed-rank test
 
 
 
