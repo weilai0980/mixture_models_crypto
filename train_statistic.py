@@ -18,11 +18,11 @@ from statsmodels.stats import diagnostic
 import pyflux as pf
 
 # ---- model and training log set-up ----
-result_file = "../bt_results/res/reg_v_minu.txt"
+result_file = "../bt_results/res/rolling/reg_v_minu.txt"
 log_file = "../bt_results/res/arima"
 model_file = "../bt_results/model/v_minu"
 
-def oneshot_prediction_arimax( xtr, extr, xts, exts, training_order, arima_order, bool_add_ex ):
+def oneshot_prediction_arimax( xtr, extr, xts, exts, arima_order, bool_add_ex ):
     roll_x = xtr
     roll_ex= extr
     
@@ -39,7 +39,7 @@ def oneshot_prediction_arimax( xtr, extr, xts, exts, training_order, arima_order
     else:
         mod = sm.tsa.statespace.SARIMAX(endog = xtr, order = arima_order)
             
-        fit_res = mod.fit(disp=False)
+        fit_res = mod.fit(disp=False )
         predict = fit_res.get_forecast( len(xts) )
         predict_ci = predict.conf_int()
         
@@ -53,7 +53,7 @@ def oneshot_prediction_arimax( xtr, extr, xts, exts, training_order, arima_order
     return xts_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat)))), \
 sqrt(mean((xtr - np.asarray(xtr_hat))*(xtr - np.asarray(xtr_hat))))
 
-def oneshot_prediction_strx( xtr, extr, xts, exts, training_order, bool_add_ex ):
+def oneshot_prediction_strx( xtr, extr, xts, exts, bool_add_ex ):
     roll_x = xtr
     roll_ex= extr
     
@@ -160,7 +160,7 @@ def roll_prediction_strx( xtr, extr, xts, exts, training_order, bool_add_ex ):
     # return rooted mse    
     return xts_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat))))
 
-def oneshot_prediction_egarch( return_tr, vol_tr, return_ts, vol_ts, training_order, method ):
+def oneshot_prediction_egarch( return_tr, vol_tr, return_ts, vol_ts, method ):
     
     if method == 'garch1':
         model = pf.GARCH(return_tr, p=1, q=1)
@@ -209,14 +209,108 @@ def roll_prediction_egarch( return_tr, vol_tr, return_ts, vol_ts, training_order
     # return rooted mse    
     return vol_hat, sqrt(mean((vol_ts - np.asarray(vol_hat))*(vol_ts - np.asarray(vol_hat))))
 
-# ---- main process ----
+    
+def train_armax_strx( xtrain, extrain, xtest, extest, result_file, ar_order, pred_file ):
+    # only rolling methods ouput both training and testing errors
+    
+    #yhat_ts, rmse = roll_prediction_arimax( xtrain, extrain, xtest, extest, 1026, (16,0,0), False, log_file )
+    #yhat_ts, rmse = roll_prediction_arimax( xtrain, extrain, xtest, extest, 1026, (16,0,0), True,  log_file )
+    #yhat_ts, rmse = roll_prediction_strx( xtrain, extrain, xtest, extest, 1026, False )
+    #yhat_ts, rmse = roll_prediction_strx( xtrain, extrain, xtest, extest, 1026,  True )
+    
+    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_arimax( xtrain, extrain, xtest, extest, (ar_order,1,1), False )
+    with open(result_file, "a") as text_file:
+        text_file.write( "%s : %f  %f \n"%("ARIMA", tr_rmse, ts_rmse) ) 
+        
+    np.savetxt(pred_file + "pytest_arima.txt", zip(xtest, yhat_ts), delimiter=',')    
+        
+    
+    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_arimax( xtrain, extrain, xtest, extest, (ar_order,0,0), True )
+    with open(result_file, "a") as text_file:
+        text_file.write( "%s : %f  %f \n"%("ARIMAX", tr_rmse, ts_rmse) ) 
+    
+    np.savetxt(pred_file + "pytest_arimax.txt", zip(xtest, yhat_ts), delimiter=',')    
+        
+    
+    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, False )
+    with open(result_file, "a") as text_file:
+        text_file.write( "%s : %f  %f \n"%("STR", tr_rmse, ts_rmse) )
+        
+    np.savetxt(pred_file + "pytest_str.txt", zip(xtest, yhat_ts), delimiter=',')    
+        
+    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, True )
+    with open(result_file, "a") as text_file:
+        text_file.write( "%s : %f  %f \n"%("STRX", tr_rmse, ts_rmse) )
+    
+    np.savetxt(pred_file + "pytest_strx.txt", zip(xtest, yhat_ts), delimiter=',')    
+    
+    return 0
+
+def train_garch( rt_train, xtrain, rt_test, xtest, result_file, pred_file ):
+    
+    #yhat_ts, rmse = roll_prediction_egarch( rt_train, xtrain, rt_test, xtest, 1000, 'garch' )
+    #yhat_ts, rmse = roll_prediction_egarch( rt_train, xtrain, rt_test, xtest, 1000, 'egarch' )
+    
+    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_egarch( rt_train, xtrain, rt_test, xtest, 'garch1' )
+    with open(result_file, "a") as text_file:
+        text_file.write( "%s : %f  %f \n"%("GARCH", tr_rmse, ts_rmse) )
+    
+    np.savetxt(pred_file + "pytest_garch.txt", zip(xtest, yhat_ts), delimiter=',')    
+    
+    
+    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_egarch( rt_train, xtrain, rt_test, xtest, 'egarch1' )
+    with open(result_file, "a") as text_file:
+        text_file.write( "%s : %f  %f \n"%("EGARCH", tr_rmse, ts_rmse) )
+    
+    np.savetxt(pred_file + "pytest_egarch.txt", zip(xtest, yhat_ts), delimiter=',')    
+    
+    return 0
+    
+    
+'''
+np.savetxt("res/pytest_" + method + ".txt", zip(xtest, yhat_ts), delimiter=',')
+
+if method in ['arima', 'arimax', 'str', 'strx', 'garch', 'egarch']:
+    
+    print 'RMSE : ', rmse
+    
+    with open(result_file, "a") as text_file:
+        text_file.write( "%s : %f  \n"%(method, rmse) ) 
+        
+else:
+    
+    print 'RMSE : ', tr_rmse, ts_rmse
+    
+    with open(result_file, "a") as text_file:
+        text_file.write( "%s : %f  %f \n"%(method, tr_rmse, ts_rmse) ) 
+        
+'''        
+        
+        
+# ONLY USED FOR ROLLING EVALUATION
+# ---- parameter set-up for preparing trainning and testing data ----
+para_order_minu = 30
+para_order_hour = 16
+bool_feature_selection = False
+# ----
+
+
+# --- main process ---
 
 #print 'Number of arguments:', len(sys.argv), 'arguments.'
 print '--- Argument List:', str(sys.argv)
-method = str(sys.argv[1]) 
-run_mode = str(sys.argv[2])
 
-if run_mode == 'local':
+# oneshot, roll, incre
+train_mode = str(sys.argv[1])
+
+if train_mode == 'oneshot':
+    
+    # log file address
+    result_file = "../bt_results/res/reg_v_minu.txt"
+    model_file = "../bt_results/model/v_minu"
+    
+    # log for predictions
+    file_path = "../bt_results/res/"
     
     if method in ['garch', 'garch1', 'egarch', 'egarch1'] :
         
@@ -238,83 +332,107 @@ if run_mode == 'local':
         extest  = np.load("../dataset/bitcoin/training_data/extest_" +file_postfix+".dat")
         
         print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
-    
-elif run_mode == 'server':
-    
-    # --- Load pre-processed training and testing data ---
-    file_postfix = "stat"
-    xtrain = np.load("../dataset/bk/xtrain_"+file_postfix+".dat")
-    extrain  = np.load("../dataset/bk/extrain_" +file_postfix+".dat")
-    xtest = np.load("../dataset/bk/xtest_"+file_postfix+".dat")
-    extest  = np.load("../dataset/bk/extest_" +file_postfix+".dat")
 
-    print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
-
-# only rolling methods ouput both training and testing errors
-if method == 'arima':
-    log_file = log_file +'.txt'
+    # all feature vectors are already normalized
+    print '--- Start one-shot training: ', np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
     
-    # initialize the log
-    with open(log_file, "w") as text_file:
-        text_file.close()
+    train_eval_models( xtrain, ytrain, xtest, ytest )
+    
+elif train_mode == 'roll' or 'incre':
+    
+    
+    # load raw feature data
+    features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat")
+    rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat")
+    all_loc_hour = np.load("../dataset/bitcoin/loc_hour.dat")
+    print '--- Start the ' + train_mode + ' training: \n', np.shape(features_minu), np.shape(rvol_hour)
+    
+    all_dta_minu = np.load("../dataset/bitcoin/dta_minu.dat")
+    price_minu, req_minu = cal_price_req_minu(all_dta_minu)
+
+    # shift to align 
+    rvol_hour = rvol_hour[1:]
+    all_loc_hour = all_loc_hour[1:]
+    
+    # set up the interval parameters
+    interval_len = 30*24
+    interval_num = int(len(rvol_hour)/interval_len)
+    roll_len = 2
+    print interval_len, interval_num
+    
+    for i in range(roll_len + 1, interval_num+1):
         
-    yhat_ts, rmse = roll_prediction_arimax( xtrain, extrain, xtest, extest, 1026, (16,0,0), False, log_file )
-    
-elif method == 'arimax':
-    log_file = log_file +'x.txt'
-    
-    # initialize the log
-    with open(log_file, "w") as text_file:
-        text_file.close()
-    
-    yhat_ts, rmse = roll_prediction_arimax( xtrain, extrain, xtest, extest, 1026, (16,0,0), True,  log_file )
-    
-elif method == 'str':
-    yhat_ts, rmse = roll_prediction_strx( xtrain, extrain, xtest, extest, 1026, False )
-    
-elif method == 'strx':
-    yhat_ts, rmse = roll_prediction_strx( xtrain, extrain, xtest, extest, 1026,  True )
-    
-elif method == 'arima1':
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_arimax( xtrain, extrain, xtest, extest, 1026, (16,0,0), False )
-    
-elif method == 'arimax1':
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_arimax( xtrain, extrain, xtest, extest, 1026, (16,0,0), True )
-    
-elif method == 'str1':
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, 1026, False )
-    
-elif method == 'strx1':
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, 1026, True )
-    
-elif method == 'garch1' or method == 'egarch1' :
-    
-    print 'using one-shot garch model: '
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_egarch( rt_train, xtrain, rt_test, xtest, 1000, method )
+        # log for predictions in each interval
+        pred_file_path = "../bt_results/res/rolling/" + str(i-1) + "_"
+        
+        print '\n --- In processing of interval ', i-1, ' --- \n'
+        with open(result_file, "a") as text_file:
+            text_file.write( "Interval %d :\n" %(i-1) )
+            
+        
+        if train_mode == 'roll':
+            
+            tmp_vol_hour = rvol_hour[(i-roll_len-1)*interval_len: i*interval_len]
+            tmp_loc_hour  = all_loc_hour[(i-roll_len-1)*interval_len: i*interval_len]
+            para_train_split_ratio = 1.0*(len(tmp_vol_hour) - interval_len)/len(tmp_vol_hour)
+            
+            
+            # check PACF order 
+            full_pacf = sm.tsa.stattools.pacf(tmp_vol_hour)
+            tmp_pacf = full_pacf[2:]
+            pacf_order = list(tmp_pacf).index(max(tmp_pacf))
 
-elif method == 'garch' or method == 'egarch':
-    
-    print 'using garch model: '
-    yhat_ts, rmse = roll_prediction_egarch( rt_train, xtrain, rt_test, xtest, 1000, method )
-    
-    
-# ---- record traning and testing errors ----    
+            tmp_ar_order = 2
+            for i in range(len(full_pacf)):
+                if full_pacf[i]>0.1:
+                    tmp_ar_order = i
+            
+            print 'PACF order: ', tmp_ar_order, '\n', full_pacf
+            
 
-np.savetxt("res/pytest_" + method + ".txt", zip(xtest, yhat_ts), delimiter=',')
-
-if method in ['arima', 'arimax', 'str', 'strx', 'garch', 'egarch']:
-    
-    print 'RMSE : ', rmse
-    
-    with open(result_file, "a") as text_file:
-        text_file.write( "%s : %f  \n"%(method, rmse) ) 
+            # prepare the data 
+            xtrain, extrain, xtest, extest = training_testing_statistic(features_minu, tmp_vol_hour, tmp_loc_hour, \
+                                para_order_minu, para_order_hour, para_train_split_ratio, bool_feature_selection)
+            
+            vol_train, rt_train, vol_test, rt_test = training_testing_garch(tmp_vol_hour, tmp_loc_hour, para_order_hour, \
+                                                                para_train_split_ratio, price_minu)
+            
+            
+            print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
+            print np.shape(vol_train), np.shape(rt_train), np.shape(vol_test), np.shape(rt_test)
+            
+            
+            # begin to train the model
+            train_armax_strx( xtrain, extrain, xtest, extest, result_file, tmp_ar_order, pred_file_path )
+            train_garch( np.asarray(rt_train), np.asarray(vol_train), np.asarray(rt_test), \
+                        np.asarray(vol_test), result_file, pred_file_path )
+            
+        
+        elif train_mode == 'incre':
+            
+            tmp_vol_hour = rvol_hour[ : i*interval_len]
+            tmp_loc_hour  = all_loc_hour[ : i*interval_len]
+            para_train_split_ratio = 1.0*(len(tmp_vol_hour) - interval_len)/len(tmp_vol_hour)
+            
+            
+            xtrain, extrain, xtest, extest = training_testing_statistic(features_minu, tmp_vol_hour, tmp_loc_hour, \
+                                para_order_minu, para_order_hour, para_train_split_ratio, bool_feature_selection)
+            
+            vol_train, rt_train, vol_test, rt_test = training_testing_garch(tmp_vol_hour, tmp_loc_hour, para_order_hour, \
+                                                                para_train_split_ratio, price_minu)
+            
+            
+            print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
+            print np.shape(vol_train), np.shape(rt_train), np.shape(vol_test), np.shape(rt_test)
+            
+            
+        else:
+            print '[ERROR] training mode'
+        
         
 else:
-    
-    print 'RMSE : ', tr_rmse, ts_rmse
-    
-    with open(result_file, "a") as text_file:
-        text_file.write( "%s : %f  %f \n"%(method, tr_rmse, ts_rmse) ) 
+    print '[ERROR] training mode'
+
     
     
     

@@ -81,38 +81,6 @@ def plot_features( test_ask, test_bid ):
 
 # --- prepare training and testing data ---
 
-def training_testing_statistic(features_minu, vol_hour, all_loc_hour, order_minu, order_hour, \
-                               train_split_ratio, bool_feature_selection):
-    tmpcnt = len(vol_hour)
-    ex = []
-    var_explained = []
-    
-    for i in range(1, tmpcnt):
-        
-        if len(features_minu)!=0:
-            
-            tmp_minu_idx = all_loc_hour[i]
-            
-            if tmp_minu_idx - order_minu < 0:
-                print "Order_minute ?"
-            
-            if bool_feature_selection == True:
-                
-                tmpfeatures = features_minu[tmp_minu_idx - order_minu : tmp_minu_idx]
-                tmpft, tmpvar = selection_on_minute_features( tmpfeatures.flatten() )
-                var_explained.append( tmpvar )
-                
-                ex.append( tmpft )
-            
-            else:
-                ex.append( np.asarray(features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]).flatten() )
-        
-    tmp_split = int(train_split_ratio*(tmpcnt-order_hour-1)) + order_hour
-            
-    # xtrain, extrain, xtest, extest
-    return vol_hour[1:tmp_split+1], ex[:tmp_split], vol_hour[tmp_split+1:], ex[tmp_split:]
-
-
 # feature gropus: auto-regressive volatility,  order book 
 
 def selection_on_minute_features(x):
@@ -198,7 +166,37 @@ def conti_normalization_test_dta(dta, train):
     else:
         return df.as_matrix()
 
+def training_testing_statistic(features_minu, vol_hour, all_loc_hour, order_minu, order_hour, \
+                               train_split_ratio, bool_feature_selection):
+    tmpcnt = len(vol_hour)
+    ex = []
+    var_explained = []
     
+    for i in range(1, tmpcnt):
+        
+        if len(features_minu)!=0:
+            
+            tmp_minu_idx = all_loc_hour[i]
+            
+            if tmp_minu_idx - order_minu < 0:
+                print "Order_minute ?"
+            
+            if bool_feature_selection == True:
+                
+                tmpfeatures = features_minu[tmp_minu_idx - order_minu : tmp_minu_idx]
+                tmpft, tmpvar = selection_on_minute_features( tmpfeatures )
+                var_explained.append( tmpvar )
+                
+                ex.append( tmpft.flatten() )
+            
+            else:
+                ex.append( np.asarray(features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]).flatten() )
+        
+    tmp_split = int(train_split_ratio*(tmpcnt-order_hour-1)) + order_hour
+            
+    # xtrain, extrain, xtest, extest
+    return vol_hour[1:tmp_split+1], ex[:tmp_split], vol_hour[tmp_split+1:], ex[tmp_split:]
+   
 def training_testing_garch(vol_hour, all_loc_hour, order_hour, train_split_ratio, price_minu):
     
     tmpcnt = len(vol_hour)
@@ -218,8 +216,8 @@ def training_testing_garch(vol_hour, all_loc_hour, order_hour, train_split_ratio
             return_hour.append( mean(tmp_return) )
         
         # check for single return 
-        if np.isnan(return_hour[-1]):
-            print all_loc_hour[i-1], all_loc_hour[i]
+        #if np.isnan(return_hour[-1]):
+        #    print all_loc_hour[i-1], all_loc_hour[i]
             
         
     tmp = price_minu[ all_loc_hour[i]: ]

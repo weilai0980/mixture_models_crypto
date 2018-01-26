@@ -84,14 +84,17 @@ Evaluation process:
    
 mixture model 
 
+post-effect:  volatility patten after different order book weights 
+
+
 ---- To Do ----
 
 
 Evaluation:
 
-Baselines: prophet, gaussian process, nips temporal regularizer 
+Baselines: prophet, gaussian process, nips temporal regularizer, simple random walk and exponential weighted model
+ 
 
-post-effect:  volatility patten after different order book weights 
 
 nonstationariety test on weight sequence
 
@@ -106,9 +109,6 @@ n ×Σ n | y ˆ t |+|y t | /2.
 
 
 Mutual information for hyper-parameters selection 
-
-simple random walk and exponential weighted model
-
 
 hyper-parameters for the benchmark models were chosen
 
