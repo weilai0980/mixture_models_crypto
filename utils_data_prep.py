@@ -14,6 +14,11 @@ def parse_date_time_hour(x):
     tmp = datetime.datetime.fromtimestamp(x/1000.0)
     return str(tmp.hour)
 
+def parse_date_time_month(x):
+    tmp = datetime.datetime.fromtimestamp(x/1000.0)
+    return str(tmp.month)
+
+
 def multivariate_ts_plot( dta_df, title_str ):
     
     matplotlib.rcParams.update({'font.size': 15})
@@ -165,7 +170,8 @@ def conti_normalization_test_dta(dta, train):
         return np.reshape(df.as_matrix(), shape_dta)
     else:
         return df.as_matrix()
-
+    
+# order_hour: remove the front order_hour data to align with regression approaches
 def training_testing_statistic(features_minu, vol_hour, all_loc_hour, order_minu, order_hour, \
                                train_split_ratio, bool_feature_selection):
     tmpcnt = len(vol_hour)
@@ -196,7 +202,8 @@ def training_testing_statistic(features_minu, vol_hour, all_loc_hour, order_minu
             
     # xtrain, extrain, xtest, extest
     return vol_hour[1:tmp_split+1], ex[:tmp_split], vol_hour[tmp_split+1:], ex[tmp_split:]
-   
+
+# prepare minute level return series 
 def training_testing_garch(vol_hour, all_loc_hour, order_hour, train_split_ratio, price_minu):
     
     tmpcnt = len(vol_hour)
@@ -368,6 +375,9 @@ def load_raw_order_book_files(file_addr, bool_dump):
 
     all_dta_minu = []
     all_loc_hour = []
+    
+    all_loc_month = []
+    pre_month = 0
 
     for i in range( len(files) ):
         dta_df = pd.read_csv( files[i] ,sep=',')
@@ -377,7 +387,15 @@ def load_raw_order_book_files(file_addr, bool_dump):
     
         all_df['date_time'] = all_df['date'].map( parse_date_time_minute )
         all_df['hour']      = all_df['date'].map( parse_date_time_hour )
+        cur_month = parse_date_time_month( all_df['date'].iloc[0] )
 
+        
+        if cur_month != pre_month:
+            all_loc_month.append( len(all_dta_minu) )
+            pre_month = cur_month
+        
+        
+        
         minute_tick = list(all_df['date_time'].unique())
         print "   ", len(minute_tick), minute_tick[-1]
     
@@ -407,7 +425,7 @@ def load_raw_order_book_files(file_addr, bool_dump):
                     loc_hour.append(i+offset)
                     pre_hour = tmp_hour[i]
         
-    
+        
         all_dta_minu += dta_minu
         all_loc_hour += loc_hour
     
@@ -415,9 +433,10 @@ def load_raw_order_book_files(file_addr, bool_dump):
     
     if bool_dump == True:
         np.asarray(all_dta_minu).dump("../dataset/bitcoin/dta_minu.dat")
-        np.asarray(all_loc_hour).dump("../dataset/bitcoin/loc_hour.dat") 
+        np.asarray(all_loc_hour).dump("../dataset/bitcoin/loc_hour.dat")
+        np.asarray(all_loc_month).dump("../dataset/bitcoin/loc_month.dat") 
     
-    return all_dta_minu, all_loc_hour
+    return all_dta_minu, all_loc_hour, all_loc_month
     
 
 # --- extract features from asking and biding sides in order book ---

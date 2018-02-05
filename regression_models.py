@@ -688,10 +688,12 @@ def gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, tra
     
     print "Begin to evaluate Gaussian process regression"
     
-    pytrain, sigma_train = gp.predict(xtrain, return_std=True)
-    pytest,  sigma_test  = gp.predict(xtest, return_std=True)
+    #pytrain, sigma_train = gp.predict(xtrain, return_std=True)
+    #tmp_tr = sqrt(mean((pytrain-ytrain)*(pytrain-ytrain)))
+    pytrain = -1
+    tmp_tr = -1
     
-    tmp_tr = sqrt(mean((pytrain-ytrain)*(pytrain-ytrain)))
+    pytest,  sigma_test  = gp.predict(xtest, return_std=True)
     tmp_ts = sqrt(mean((pytest-ytest)*(pytest-ytest)))
     
     print "RMSE: ", tmp_tr, tmp_ts
@@ -708,8 +710,8 @@ def gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, tra
     np.savetxt(pred_file + "pytest_gp.txt", zip(ytest, py), delimiter=',')
     
     # save training resutls under the best model
-    py = gp.predict( xtrain )
-    np.savetxt(pred_file + "pytrain_gp.txt", zip(ytrain, py), delimiter=',')
+    #py = gp.predict( xtrain )
+    #np.savetxt(pred_file + "pytrain_gp.txt", zip(ytrain, py), delimiter=',')
     
     # return the least validation error 
     return tmp_ts
@@ -764,4 +766,87 @@ def lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, 
     
     # return the least validation error 
     return min(tmp_err, key = lambda x:x[1])[1]
+
+
+# ++++ exponential weighted moving average ++++
+
+def ewma_validate(ytrain, ytest, result_file, pred_file):
+    
+    rmse = []
+    pred_tr = []
+    pred_ts = []
+    
+    for alpha in [0.005, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+        
+        his = 0.0
+        diff_tr = []
+        diff_ts = []
+        
+        tmp_pred = ytrain[0]
+        
+        tmp_pred_tr = []
+        tmp_pred_ts = []
+        
+        # training phase
+        for i in ytrain:
+            diff_tr.append(i-tmp_pred)
+            tmp_pred_tr.append(tmp_pred)
+            tmp_pred = (1.0-alpha)*i + alpha*his
+        
+        # testing phase
+        for i in ytest:
+            diff_ts.append(i-tmp_pred)
+            tmp_pred_ts.append(tmp_pred)
+            tmp_pred = (1.0-alpha)*i + alpha*his
+            
+        
+        diff_tr = np.asarray(diff_tr)
+        diff_ts = np.asarray(diff_ts)
+        
+        rmse.append( [alpha, sqrt(mean(diff_tr*diff_tr)), sqrt(mean(diff_ts*diff_ts))] )
+        pred_tr.append( tmp_pred_tr )
+        pred_ts.append( tmp_pred_ts )
+    
+    best = min(rmse, key = lambda x:x[2]) 
+    best_alpha = min(rmse, key = lambda x:x[2])[0]
+    
+    # retrain with the best parameter
+    
+    his = 0.0
+        
+    tmp_pred = ytrain[0]
+    tmp_pred_tr = []
+    tmp_pred_ts = []
+        
+    # training phase
+    for i in ytrain:
+        tmp_pred_tr.append(tmp_pred)
+        tmp_pred = (1.0-best_alpha)*i + alpha*his
+        
+    # testing phase
+    for i in ytest:
+        tmp_pred_ts.append(tmp_pred)
+        tmp_pred = (1.0-best_alpha)*i + alpha*his
+    
+    # save the overall errors
+    with open(result_file, "a") as text_file:
+        text_file.write( "EWMA: %s, \n"%( str(best) ))
+        
+    # save testing resutls under the best model
+    np.savetxt(pred_file + "pytest_ewma.txt", zip(ytest, tmp_pred_ts), delimiter=',')
+    
+    # save training resutls under the best model
+    np.savetxt(pred_file + "pytrain_ewma.txt", zip(ytrain, tmp_pred_tr), delimiter=',')
+        
+    return best[2]
+
+
+
+
+
+
+
+
+
+
 

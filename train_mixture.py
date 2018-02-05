@@ -50,8 +50,6 @@ with open(training_log, "w") as text_file:
 
 
 
-
-
 # ---- Approach specific parameters ----
 
 # -- Mixture linear
@@ -96,7 +94,7 @@ para_model_check = 10
 
 '''
 
-# ---- training and evalution function ----
+# ---- training and evalution methods ----
     
 def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):   
     
@@ -209,7 +207,7 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
 
     return best_epoch, min(tmp_test_err, key = lambda x:x[2])
         
-        
+# retrain the model with the best parameter set-up        
 def validate_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest, file_addr, model_file, best_epoch ): 
     
     # stabilize the network by fixing the random seed
@@ -335,10 +333,10 @@ def validate_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest, file_ad
         else:
             
             w1 = clf.collect_coeff_values("mean")
-            np.asarray(w1[1]).dump( file_addr + "weight_pre.dat" )
+            np.asarray(w1[1]).dump( file_addr + "weight_pre_mix.dat" )
             
             w2 = clf.collect_coeff_values("gate")
-            np.asarray(w2[1]).dump( file_addr + "weight_gate.dat" )
+            np.asarray(w2[1]).dump( file_addr + "weight_gate_mix.dat" )
             
         # reset the model 
         clf.model_reset()

@@ -17,16 +17,24 @@ from statsmodels.stats import diagnostic
 
 import pyflux as pf
 
+
+# ONLY USED FOR ROLLING EVALUATION
+# ---- parameter set-up for preparing trainning and testing data ----
+para_order_minu = 20
+para_order_hour = 16
+bool_feature_selection = False
+# ----
+
+
 # ---- model and training log set-up ----
-result_file = "../bt_results/res/rolling/reg_v_minu.txt"
+result_file = "../bt_results/res/rolling/reg_v_minu_stats.txt"
 log_file = "../bt_results/res/arima"
 model_file = "../bt_results/model/v_minu"
 
+
+# ---- training methods ----
 def oneshot_prediction_arimax( xtr, extr, xts, exts, arima_order, bool_add_ex ):
-    roll_x = xtr
-    roll_ex= extr
     
-    exdim = len(exts[0])
     xts_hat = []
         
     if bool_add_ex == True:
@@ -50,14 +58,11 @@ def oneshot_prediction_arimax( xtr, extr, xts, exts, arima_order, bool_add_ex ):
     xts_hat = predict.predicted_mean
     
     # out-sample forecast, in-sample rmse, out-sample rmse      
-    return xts_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat)))), \
+    return xts_hat, xtr_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat)))), \
 sqrt(mean((xtr - np.asarray(xtr_hat))*(xtr - np.asarray(xtr_hat))))
 
 def oneshot_prediction_strx( xtr, extr, xts, exts, bool_add_ex ):
-    roll_x = xtr
-    roll_ex= extr
     
-    exdim = len(exts[0])
     xts_hat = []
     
     if bool_add_ex == True:
@@ -81,7 +86,7 @@ def oneshot_prediction_strx( xtr, extr, xts, exts, bool_add_ex ):
     xtr_hat = tr_predict.predicted_mean    
     
     # out-sample forecast, in-sample rmse, out-sample rmse      
-    return xts_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat)))), \
+    return xts_hat, xtr_hat, sqrt(mean((xts - np.asarray(xts_hat))*(xts - np.asarray(xts_hat)))), \
 sqrt(mean((xtr - np.asarray(xtr_hat))*(xtr - np.asarray(xtr_hat))))
 
 def roll_prediction_arimax( xtr, extr, xts, exts, training_order, arima_order, bool_add_ex, log_file ):
@@ -135,6 +140,16 @@ def roll_prediction_strx( xtr, extr, xts, exts, training_order, bool_add_ex ):
         tmp_x = roll_x[-training_order:]
         tmp_ex = roll_ex[-training_order:]
         
+        # --- test 
+        tmp_x1  = np.expand_dims(np.asarray(roll_x[-training_order-100:-100]), 0)
+        tmp_ex1 = np.asarray(roll_ex[-training_order-100:-100])
+        tmp_x   = np.expand_dims(np.asarray(tmp_x), 0)
+        tmp_ex  = np.asarray(tmp_ex)
+        
+        tmp_x = np.concatenate( [tmp_x, tmp_x1], 0 )
+        print '!! test shape: ', np.shape(tmp_x)
+        # ---
+        
         print 'test on: ', i 
         
         if bool_add_ex == True:
@@ -181,7 +196,7 @@ def oneshot_prediction_egarch( return_tr, vol_tr, return_ts, vol_ts, method ):
     for i in tmp_pre:
         vol_ts_hat.append(i[0])
     
-    return vol_ts_hat, sqrt(mean((vol_ts - np.asarray(vol_ts_hat))*(vol_ts - np.asarray(vol_ts_hat)))), \
+    return vol_ts_hat, vol_tr_hat, sqrt(mean((vol_ts - np.asarray(vol_ts_hat))*(vol_ts - np.asarray(vol_ts_hat)))), \
 sqrt(mean((vol_tr[1:] - np.asarray(vol_tr_hat))*(vol_tr[1:] - np.asarray(vol_tr_hat))))
     
 def roll_prediction_egarch( return_tr, vol_tr, return_ts, vol_ts, training_order, method ):
@@ -216,33 +231,45 @@ def train_armax_strx( xtrain, extrain, xtest, extest, result_file, ar_order, pre
     #yhat_ts, rmse = roll_prediction_arimax( xtrain, extrain, xtest, extest, 1026, (16,0,0), False, log_file )
     #yhat_ts, rmse = roll_prediction_arimax( xtrain, extrain, xtest, extest, 1026, (16,0,0), True,  log_file )
     #yhat_ts, rmse = roll_prediction_strx( xtrain, extrain, xtest, extest, 1026, False )
-    #yhat_ts, rmse = roll_prediction_strx( xtrain, extrain, xtest, extest, 1026,  True )
+    #yhat_ts, rmse = 
     
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_arimax( xtrain, extrain, xtest, extest, (ar_order,1,1), False )
+    #roll_prediction_strx( xtrain, extrain, xtest, extest, 1026,  False )
+    
+    '''
+    yhat_ts, yhat_tr, ts_rmse, tr_rmse = oneshot_prediction_arimax( xtrain, extrain, xtest, extest, (ar_order,1,0), False )
     with open(result_file, "a") as text_file:
         text_file.write( "%s : %f  %f \n"%("ARIMA", tr_rmse, ts_rmse) ) 
         
-    np.savetxt(pred_file + "pytest_arima.txt", zip(xtest, yhat_ts), delimiter=',')    
-        
+    np.savetxt(pred_file + "pytest_arima.txt", zip(xtest, yhat_ts), delimiter=',')  
+    np.savetxt(pred_file + "pytrain_arima.txt", zip(xtrain, yhat_tr), delimiter=',')  
+    '''    
     
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_arimax( xtrain, extrain, xtest, extest, (ar_order,0,0), True )
+    '''
+    yhat_ts, yhat_tr, ts_rmse, tr_rmse = oneshot_prediction_arimax( xtrain, extrain, xtest, extest, (ar_order,1,0), True )
     with open(result_file, "a") as text_file:
         text_file.write( "%s : %f  %f \n"%("ARIMAX", tr_rmse, ts_rmse) ) 
     
     np.savetxt(pred_file + "pytest_arimax.txt", zip(xtest, yhat_ts), delimiter=',')    
-        
+    np.savetxt(pred_file + "pytrain_arimax.txt", zip(xtrain, yhat_tr), delimiter=',')  
+    print 'ARIMAX : ', tr_rmse, ts_rmse
+    '''
     
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, False )
+    '''
+    yhat_ts, yhat_tr, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, False )
     with open(result_file, "a") as text_file:
         text_file.write( "%s : %f  %f \n"%("STR", tr_rmse, ts_rmse) )
         
     np.savetxt(pred_file + "pytest_str.txt", zip(xtest, yhat_ts), delimiter=',')    
-        
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, True )
-    with open(result_file, "a") as text_file:
-        text_file.write( "%s : %f  %f \n"%("STRX", tr_rmse, ts_rmse) )
+    np.savetxt(pred_file + "pytrain_str.txt", zip(xtrain, yhat_tr), delimiter=',')
+    '''
     
-    np.savetxt(pred_file + "pytest_strx.txt", zip(xtest, yhat_ts), delimiter=',')    
+    yhat_ts, yhat_tr, ts_rmse, tr_rmse = oneshot_prediction_strx( xtrain, extrain, xtest, extest, True )
+    #with open(result_file, "a") as text_file:
+    #    text_file.write( "%s : %f  %f \n"%("STRX", tr_rmse, ts_rmse) )
+    
+    np.savetxt(pred_file + "pytest_strx.txt", zip(xtest, yhat_ts), delimiter=',')
+    np.savetxt(pred_file + "pytrain_strx.txt", zip(xtrain, yhat_tr), delimiter=',')
+    print 'STRX : ', tr_rmse, ts_rmse
     
     return 0
 
@@ -251,49 +278,24 @@ def train_garch( rt_train, xtrain, rt_test, xtest, result_file, pred_file ):
     #yhat_ts, rmse = roll_prediction_egarch( rt_train, xtrain, rt_test, xtest, 1000, 'garch' )
     #yhat_ts, rmse = roll_prediction_egarch( rt_train, xtrain, rt_test, xtest, 1000, 'egarch' )
     
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_egarch( rt_train, xtrain, rt_test, xtest, 'garch1' )
+    yhat_ts, yhat_tr, ts_rmse, tr_rmse = oneshot_prediction_egarch( rt_train, xtrain, rt_test, xtest, 'garch1' )
     with open(result_file, "a") as text_file:
         text_file.write( "%s : %f  %f \n"%("GARCH", tr_rmse, ts_rmse) )
     
-    np.savetxt(pred_file + "pytest_garch.txt", zip(xtest, yhat_ts), delimiter=',')    
+    np.savetxt(pred_file + "pytest_garch.txt", zip(xtest, yhat_ts), delimiter=',')
+    np.savetxt(pred_file + "pytrain_garch.txt", zip(xtrain, yhat_tr), delimiter=',')
     
     
-    yhat_ts, ts_rmse, tr_rmse = oneshot_prediction_egarch( rt_train, xtrain, rt_test, xtest, 'egarch1' )
+    yhat_ts, yhat_tr, ts_rmse, tr_rmse = oneshot_prediction_egarch( rt_train, xtrain, rt_test, xtest, 'egarch1' )
     with open(result_file, "a") as text_file:
         text_file.write( "%s : %f  %f \n"%("EGARCH", tr_rmse, ts_rmse) )
     
-    np.savetxt(pred_file + "pytest_egarch.txt", zip(xtest, yhat_ts), delimiter=',')    
+    np.savetxt(pred_file + "pytest_egarch.txt", zip(xtest, yhat_ts), delimiter=',')
+    np.savetxt(pred_file + "pytrain_egarch.txt", zip(xtrain, yhat_tr), delimiter=',')
     
     return 0
     
-    
-'''
-np.savetxt("res/pytest_" + method + ".txt", zip(xtest, yhat_ts), delimiter=',')
-
-if method in ['arima', 'arimax', 'str', 'strx', 'garch', 'egarch']:
-    
-    print 'RMSE : ', rmse
-    
-    with open(result_file, "a") as text_file:
-        text_file.write( "%s : %f  \n"%(method, rmse) ) 
         
-else:
-    
-    print 'RMSE : ', tr_rmse, ts_rmse
-    
-    with open(result_file, "a") as text_file:
-        text_file.write( "%s : %f  %f \n"%(method, tr_rmse, ts_rmse) ) 
-        
-'''        
-        
-        
-# ONLY USED FOR ROLLING EVALUATION
-# ---- parameter set-up for preparing trainning and testing data ----
-para_order_minu = 30
-para_order_hour = 16
-bool_feature_selection = False
-# ----
-
 
 # --- main process ---
 
@@ -340,16 +342,17 @@ if train_mode == 'oneshot':
     
 elif train_mode == 'roll' or 'incre':
     
-    
     # load raw feature data
     features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat")
     rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat")
     all_loc_hour = np.load("../dataset/bitcoin/loc_hour.dat")
-    print '--- Start the ' + train_mode + ' training: \n', np.shape(features_minu), np.shape(rvol_hour)
     
     all_dta_minu = np.load("../dataset/bitcoin/dta_minu.dat")
     price_minu, req_minu = cal_price_req_minu(all_dta_minu)
-
+    
+    
+    print '--- Start the ' + train_mode + ' training: \n', np.shape(features_minu), np.shape(rvol_hour)
+    
     # shift to align 
     rvol_hour = rvol_hour[1:]
     all_loc_hour = all_loc_hour[1:]
@@ -377,7 +380,8 @@ elif train_mode == 'roll' or 'incre':
             para_train_split_ratio = 1.0*(len(tmp_vol_hour) - interval_len)/len(tmp_vol_hour)
             
             
-            # check PACF order 
+            # -- AR order
+            # adaptivly change the auto-regressive order, check PACF order of the current training data
             full_pacf = sm.tsa.stattools.pacf(tmp_vol_hour)
             tmp_pacf = full_pacf[2:]
             pacf_order = list(tmp_pacf).index(max(tmp_pacf))
@@ -387,8 +391,11 @@ elif train_mode == 'roll' or 'incre':
                 if full_pacf[i]>0.1:
                     tmp_ar_order = i
             
+            if tmp_ar_order < 16:
+                tmp_ar_order = 16
+                
             print 'PACF order: ', tmp_ar_order, '\n', full_pacf
-            
+            # --
 
             # prepare the data 
             xtrain, extrain, xtest, extest = training_testing_statistic(features_minu, tmp_vol_hour, tmp_loc_hour, \
@@ -397,15 +404,15 @@ elif train_mode == 'roll' or 'incre':
             vol_train, rt_train, vol_test, rt_test = training_testing_garch(tmp_vol_hour, tmp_loc_hour, para_order_hour, \
                                                                 para_train_split_ratio, price_minu)
             
-            
+            print np.shape(tmp_vol_hour), np.shape(tmp_loc_hour)
             print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
             print np.shape(vol_train), np.shape(rt_train), np.shape(vol_test), np.shape(rt_test)
             
             
             # begin to train the model
             train_armax_strx( xtrain, extrain, xtest, extest, result_file, tmp_ar_order, pred_file_path )
-            train_garch( np.asarray(rt_train), np.asarray(vol_train), np.asarray(rt_test), \
-                        np.asarray(vol_test), result_file, pred_file_path )
+            #train_garch( np.asarray(rt_train), np.asarray(vol_train), np.asarray(rt_test), \
+            #            np.asarray(vol_test), result_file, pred_file_path )
             
         
         elif train_mode == 'incre':
@@ -415,6 +422,24 @@ elif train_mode == 'roll' or 'incre':
             para_train_split_ratio = 1.0*(len(tmp_vol_hour) - interval_len)/len(tmp_vol_hour)
             
             
+            # -- AR order
+            # adaptivly change the auto-regressive order, check PACF order of the current training data
+            full_pacf = sm.tsa.stattools.pacf(tmp_vol_hour)
+            tmp_pacf = full_pacf[2:]
+            pacf_order = list(tmp_pacf).index(max(tmp_pacf))
+
+            tmp_ar_order = 2
+            for i in range(len(full_pacf)):
+                if full_pacf[i]>0.1:
+                    tmp_ar_order = i
+            
+            if tmp_ar_order < 16:
+                tmp_ar_order = 16
+                
+            print 'PACF order: ', tmp_ar_order, '\n', full_pacf
+            # --
+            
+            # prepare the data
             xtrain, extrain, xtest, extest = training_testing_statistic(features_minu, tmp_vol_hour, tmp_loc_hour, \
                                 para_order_minu, para_order_hour, para_train_split_ratio, bool_feature_selection)
             
@@ -422,8 +447,14 @@ elif train_mode == 'roll' or 'incre':
                                                                 para_train_split_ratio, price_minu)
             
             
+            print np.shape(tmp_vol_hour), np.shape(tmp_loc_hour)
             print np.shape(xtrain), np.shape(extrain), np.shape(xtest), np.shape(extest)
             print np.shape(vol_train), np.shape(rt_train), np.shape(vol_test), np.shape(rt_test)
+            
+            # begin to train the model
+            train_armax_strx( xtrain, extrain, xtest, extest, result_file, tmp_ar_order, pred_file_path )
+            train_garch( np.asarray(rt_train), np.asarray(vol_train), np.asarray(rt_test), \
+                        np.asarray(vol_test), result_file, pred_file_path )
             
             
         else:

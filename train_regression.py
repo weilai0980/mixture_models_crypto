@@ -11,9 +11,9 @@ from regression_models import *
 
 # ONLY USED FOR ROLLING EVALUATION
 # ---- parameter set-up for preparing trainning and testing data ----
-para_order_minu = 30
+para_order_minu = 50
 para_order_hour = 16
-bool_feature_selection = True
+bool_feature_selection = False
 bool_add_feature = True
 # ----
 
@@ -28,12 +28,13 @@ bool_clf = False
 #    text_file.close()
 
 load_file_postfix = "v_minu_reg"
-model_list = ['gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge']
+model_list = ['gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge', 'ewma']
 # 'gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge', 'lasso'
 
 def train_eval_models( xtrain, ytrain, xtest, ytest ):
     
     best_err_ts = []
+    
     
     # GBT gradient boosted tree
     tmperr = gbt_train_validate(xtrain, ytrain, xtest, ytest, 0.0, bool_clf, result_file, model_file + '_gbt.sav', file_path)
@@ -46,19 +47,22 @@ def train_eval_models( xtrain, ytrain, xtest, ytest ):
     # XGBoosted extreme gradient boosted
     tmperr = xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, 0, result_file, model_file + '_xgt.sav', file_path)
     best_err_ts.append(tmperr)
+    
    
     # log transformation of y
     log_ytrain = []
     #log(ytrain+1e-5)
     
+    # note: remove the training error calculation
     # Gaussain process 
     tmperr = gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_gp.sav', log_ytrain, file_path)
     best_err_ts.append(tmperr)
     
+    
     # Bayesian regression
-    tmperr = bayesian_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_bayes.sav', log_ytrain,\
-                                        file_path)
-    best_err_ts.append(tmperr)
+    #tmperr = bayesian_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_bayes.sav', log_ytrain,\
+    #                                    file_path)
+    #best_err_ts.append(tmperr)
     
     # ElasticNet
     tmperr = elastic_net_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_enet.sav', log_ytrain,\
@@ -66,13 +70,18 @@ def train_eval_models( xtrain, ytrain, xtest, ytest ):
     best_err_ts.append(tmperr)
     
     #Ridge regression
-    tmperr = ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_ridge.sav', log_ytrain,\
-                                      file_path)
-    best_err_ts.append(tmperr)
+    #tmperr = ridge_reg_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_ridge.sav', log_ytrain,\
+    #                                  file_path)
+    #best_err_ts.append(tmperr)
     
     # Lasso 
     #tmperr = lasso_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file + '_lasso.sav', log_ytrain, file_path)
     #best_err_ts.append(tmperr)
+    
+    # EWMA
+    #tmperr = ewma_validate(ytrain, ytest, result_file, file_path)
+    #best_err_ts.append(tmperr)
+    
     
     return best_err_ts
 
@@ -123,7 +132,7 @@ elif train_mode == 'roll' or 'incre':
     interval_num = int(len(y)/interval_len)
     print np.shape(x), np.shape(y), interval_len, interval_num
     roll_len = 2
-    
+    '''
     # the main loop 
     for i in range(roll_len + 1, interval_num+1):
         
@@ -147,18 +156,10 @@ elif train_mode == 'roll' or 'incre':
         else:
             print '[ERROR] training mode'
         
-        '''
-        # dump training and testing data in one interval to disk 
-        np.asarray(xtrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtrain_reg.dat")
-        np.asarray(xtest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtest_reg.dat")
-        np.asarray(ytrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytrain_reg.dat")
-        np.asarray(ytest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytest_reg.dat")
-        '''
         
         # split into training and testin data, normalization
         xtrain, ytrain, xtest, ytest = training_testing_plain_regression(tmp_x, tmp_y, para_train_split_ratio)
         print np.shape(xtrain), np.shape(ytrain), np.shape(xtest), np.shape(ytest)
-        
         
         
         # train and evaluate models
@@ -166,7 +167,7 @@ elif train_mode == 'roll' or 'incre':
         tmp_errors = train_eval_models( np.asarray(xtrain), np.asarray(ytrain), np.asarray(xtest), np.asarray(ytest) )
         
         print list(zip(model_list, tmp_errors))
-    
+    '''
 else:
     print '[ERROR] training mode'
 
