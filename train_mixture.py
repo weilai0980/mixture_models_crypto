@@ -61,6 +61,7 @@ para_l2_linear = 0.001
 para_y_log = False
 para_pred_exp = False
 
+para_step_gap = 6
 '''
 # -- Mixture MLP 
 # representability
@@ -432,7 +433,10 @@ elif train_mode == 'roll' or 'incre':
     
     # prepare the set of pairs of features and targets
     x, y, var_explain = prepare_feature_target( features_minu, rvol_hour, all_loc_hour, \
-                                                        para_order_minu, para_order_hour, bool_feature_selection )
+                                                para_order_minu, para_order_hour, bool_feature_selection, para_step_gap )
+    
+    
+    print 'test : ', np.shape(x), np.shape(y) 
     
     # set up the training and evaluation interval 
     interval_len = 30*24
@@ -441,6 +445,7 @@ elif train_mode == 'roll' or 'incre':
     roll_len = 2
     
     
+    # note down prediction errors 
     with open(res_file, "a") as text_file:
             text_file.write( "\n" )
     
@@ -453,7 +458,7 @@ elif train_mode == 'roll' or 'incre':
         sess = tf.InteractiveSession()
         
         # log for predictions in each interval
-        pred_file = "../bt_results/res/rolling/" + str(i-1) + "_"
+        pred_file = "../bt_results/res/rolling/" + str(i-1) + "_" + str(para_step_gap) + '_'
         
         print '\n --- In processing of interval ', i-1, ' --- \n'
         with open(res_file, "a") as text_file:
@@ -521,6 +526,7 @@ elif train_mode == 'roll' or 'incre':
             text_file.write( "Mixture %s  %s %s %s : %s  \n"%(method, para_loss_type, para_distr_type, 
                                                               'bi-linear' if para_bool_bilinear else 'linear', \
                                                               str(tmp_error)) )
+       
         
 else:
     print '[ERROR] training mode'

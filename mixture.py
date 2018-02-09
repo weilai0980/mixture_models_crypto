@@ -302,11 +302,29 @@ class mixture_linear_lk():
             
             elif loss_type == 'lk' and distr_type == 'norm':
                 
-                # for roll
-                self.regu = 0.001*(regu_v_mean) + 0.0001*(regu_d_mean[0]) + 0.0001*(regu_d_mean[1])+\
+                
+                # for gap >1, 6
+                self.regu = 0.001*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
                         0.00001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
-                        + 0.001*(regu_v_var + regu_d_var)\
-                        + 0.01*regu_mean_pos\
+                        + 0.00001*(regu_v_var + regu_d_var)\
+                        + 0.001*regu_mean_pos\
+                        #+ 0.001*regu_mean_diver
+                        
+                
+                # for gap >1, 4
+                '''
+                self.regu = 0.001*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
+                        0.00001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
+                        + 0.00001*(regu_v_var + regu_d_var)\
+                        + 0.001*regu_mean_pos\
+                        #+ 0.001*regu_mean_diver
+                '''
+                
+                # for roll
+                #self.regu = 0.001*(regu_v_mean) + 0.0001*(regu_d_mean[0]) + 0.0001*(regu_d_mean[1])+\
+                #        0.00001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
+                #        + 0.001*(regu_v_var + regu_d_var)\
+                #        + 0.01*regu_mean_pos\
                         #+ 0.001*regu_mean_diver
                 
                 # for one-shot

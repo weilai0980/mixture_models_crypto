@@ -95,7 +95,7 @@ def selection_on_minute_features(x):
     return ipca.transform(x), sum(ipca.explained_variance_ratio_)
 
 def prepare_feature_target(features_minu, vol_hour, all_loc_hour, \
-                           order_minu, order_hour, bool_feature_selection):
+                           order_minu, order_hour, bool_feature_selection, step_gap):
     
     tmpcnt = len(vol_hour)
     y = []
@@ -103,17 +103,18 @@ def prepare_feature_target(features_minu, vol_hour, all_loc_hour, \
     
     var_explained = []
     
-    for i in range( order_hour, tmpcnt ):
+    for i in range( order_hour + step_gap, tmpcnt ):
         y.append( vol_hour[i] )
         
-        x.append( [vol_hour[i-order_hour:i]] )
+        x.append( [vol_hour[i - order_hour - step_gap : i - step_gap]] )
         
         if len(features_minu)!=0:
             
-            tmp_minu_idx = all_loc_hour[i] 
+            tmp_minu_idx = all_loc_hour[i - step_gap] 
+            
             if tmp_minu_idx - order_minu < 0:
                 print "Order_minute ?"
-            
+                
             if bool_feature_selection == True:
                 
                 tmpfeatures = features_minu[tmp_minu_idx-order_minu : tmp_minu_idx]

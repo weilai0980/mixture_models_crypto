@@ -812,7 +812,7 @@ def ewma_validate(ytrain, ytest, result_file, pred_file):
     
     # retrain with the best parameter
     
-    his = 0.0
+    hist = 0.0
         
     tmp_pred = ytrain[0]
     tmp_pred_tr = []
@@ -821,12 +821,12 @@ def ewma_validate(ytrain, ytest, result_file, pred_file):
     # training phase
     for i in ytrain:
         tmp_pred_tr.append(tmp_pred)
-        tmp_pred = (1.0-best_alpha)*i + alpha*his
+        tmp_pred = (1.0-best_alpha)*i + best_alpha*hist
         
     # testing phase
     for i in ytest:
         tmp_pred_ts.append(tmp_pred)
-        tmp_pred = (1.0-best_alpha)*i + alpha*his
+        tmp_pred = (1.0-best_alpha)*i + best_alpha*hist
     
     # save the overall errors
     with open(result_file, "a") as text_file:

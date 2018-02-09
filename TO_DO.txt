@@ -101,8 +101,17 @@ n ×Σ n | y ˆ t |+|y t | /2.
 
 Rolling evalution on statistis baselines
 
+Paper write-up:
+   
+   cycle and bias terms in structural time series model 
+   
+
 
 ---- To Do ----
+
+posterior probability of hidden state
+
+dynamical linear system
 
 survey ICDM
 
