@@ -61,7 +61,7 @@ para_l2_linear = 0.001
 para_y_log = False
 para_pred_exp = False
 
-para_step_gap = 6
+para_step_gap = 0
 '''
 # -- Mixture MLP 
 # representability

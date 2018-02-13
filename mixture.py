@@ -304,8 +304,8 @@ class mixture_linear_lk():
                 
                 
                 # for gap >1, 6
-                self.regu = 0.001*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
-                        0.00001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
+                self.regu = 0.1*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
+                        0.001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
                         + 0.00001*(regu_v_var + regu_d_var)\
                         + 0.001*regu_mean_pos\
                         #+ 0.001*regu_mean_diver

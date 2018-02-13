@@ -362,7 +362,7 @@ def cal_return_volatility_hour( loc_hour, price_minu, return_type ):
             tmp_return.append(log(tmp[j]*1.0/(tmp[j-1]+1e-5)+1e-5))
     
     rvol_hour.append( np.std(tmp_return) )
-    return_minu+=tmp_return
+    return_minu += tmp_return
     
     print 'Done'
     
