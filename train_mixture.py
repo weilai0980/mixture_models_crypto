@@ -485,11 +485,12 @@ elif train_mode == 'roll' or 'incre':
             xtrain, ytrain, xtest, ytest = training_testing_mixture_mlp(tmp_x, tmp_y, para_train_split_ratio)
         
         # dump training and testing data in one interval to disk 
+        '''
         np.asarray(xtrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtrain_mix.dat")
         np.asarray(xtest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_xtest_mix.dat")
         np.asarray(ytrain).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytrain_mix.dat")
         np.asarray(ytest ).dump("../dataset/bitcoin/training_data/rolling/" + str(i-1) + "_ytest_mix.dat")
-        
+        '''
         
         # feature split, normalization READY
         xtr, xtr_exter, xts, xts_exter = preprocess_feature_mixture(xtrain, xtest)

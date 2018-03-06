@@ -103,48 +103,56 @@ Rolling evalution on statistis baselines
 
 Paper write-up:
    
-   cycle and bias terms in structural time series model 
+   cycle and bias terms in structural time series model,  
    
 
+Baseline:
+  moving average and filter
+  aggregate to the same grnularity, gaussian process 
+  
 
 ---- To Do ----
 
+proof of convex of loss function 
+
+Baseline: dynamical linear system, phrophet, ARIMA+GARCH
+
+proximal gradient for lasso 
+Bayeisan way 
+
+derivation of mixture variance 
+
 posterior probability of hidden state
 
-dynamical linear system
-
-survey ICDM
+survey KDD, ICDM
 
 multi-step ahead: order book effect decreases
 
-ARIMA+GARCH
-
-dynamical linear system 
 
 
 Evaluation:
 
-when the difference between mixture and baseline is close, pattern of order book 
+  when the difference between mixture and baseline is close, pattern of order book 
 
-Baselines: prophet, gaussian process, nips temporal regularizer, simple random walk and exponential weighted model
+  Baselines: prophet, gaussian process, nips temporal regularizer, simple random walk and exponential weighted model
  
 
-Mutual information for hyper-parameters selection 
+  Mutual information for hyper-parameters selection 
 
-hyper-parameters for the benchmark models were chosen
+  hyper-parameters for the benchmark models were chosen
 
-the sensitivity of the model's performance with respect to the architecture of the 'Significance' network
+  the sensitivity of the model's performance with respect to the architecture of the 'Significance' network
 
 
-prediction distribution  A v.s. B 
+  prediction distribution  A v.s. B 
 
-log-likelihood 
+  log-likelihood 
 
-Performance w.r.t. different data property, approach property
+  Performance w.r.t. different data property, approach property
 
-relation reveald by the model
+  relation reveald by the model
 
-Wilcoxon signed-rank test
+  Wilcoxon signed-rank test
 
 
 Experiments steps:
@@ -197,11 +205,6 @@ Mixture:
   Sparse & regularization:
   Relevance Vector Machines
   Spike and slab 
-  
-
-Baseline:
-  moving average and filter
-  aggregate to the same grnularity, gaussian process 
   
 
 Bayesian:
