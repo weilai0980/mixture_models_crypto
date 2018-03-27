@@ -52,48 +52,17 @@ with open(training_log, "w") as text_file:
 
 # ---- Approach specific parameters ----
 
-# -- Mixture linear
+# -- variational  
 para_lr_linear = 0.001
 para_n_epoch_linear = 300
-para_batch_size_linear = 32
+para_batch_size_linear = 1440
 para_l2_linear = 0.001
 
 para_y_log = False
 para_pred_exp = False
 
 para_step_gap = 0
-'''
-# -- Mixture MLP 
-# representability
-para_lr_mlp = 0.001
-para_n_hidden_list_mlp = [ [32, 16, 4], [32, 16, 4], [32, 4], [16, 8] ]
-para_n_epoch_mlp = 400
-para_batch_size_mlp = 64
-
-# regularization
-para_l2_mlp = 0.005
-para_keep_prob_mlp = 1.0
-
-# -- Mixture LSTM 
-
-#para_loss_type = 'norm'
-#'lognorm', 'sq'
-
-# representability
-para_lstm_dims = [ [8, 4], [32, 16] ]
-para_dense_dims = [ [32, 16], [32, 16, 8], [32, 16] ]
-
-para_lr_lstm = 0.002
-para_n_epoch_lstm = 300
-
-# regularization 
-para_l2_lstm = 0.001
-para_batch_size_lstm = 64
-para_keep_prob_lstm = 1.0
-
-para_model_check = 10
-
-'''
+para_eval_sample = 100
 
 # ---- training and evalution methods ----
     
@@ -107,52 +76,25 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
         
     with tf.Session() as sess:
         
-        if method == 'linear':
-            clf = mixture_linear(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
+        if method == 'bayes-linear':
+            
+            clf = variational_mixture_linear(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
                                   para_order_distr, para_order_steps, para_y_log, para_bool_bilinear,\
-                                  para_loss_type, para_distr_type)
+                                  para_loss_type, para_distr_type, para_eval_sample)
             
             para_n_epoch = para_n_epoch_linear
             para_batch_size = para_batch_size_linear
             para_keep_prob = 1.0
-            
-            
-        elif method == 'mlp':
-            clf = neural_mixture_dense(sess, para_n_hidden_list_mlp, para_lr_mlp, para_l2_mlp, para_batch_size_mlp,\
-                                       para_order_v, para_order_distr )
-            para_n_epoch = para_n_epoch_mlp
-            para_batch_size = para_batch_size_mlp
-            para_keep_prob = para_keep_prob_mlp
-        
-        elif method == 'lstm':
-            
-            # reshape the data for lstm
-            if len(np.shape(xtr_v))==2:
-                xts_v = np.expand_dims( xts_v, 2 )
-                xtr_v = np.expand_dims( xtr_v,  2 )
-            
-            print '---- Data shape for Mixture LSTM: '
-            print np.shape(xtr_v), np.shape(xtr_distr)
-            print np.shape(xts_v), np.shape(xts_distr)
-            
-            para_n_epoch    = para_n_epoch_lstm
-            para_batch_size = para_batch_size_lstm
-            para_keep_prob = para_keep_prob_lstm
-            
-            # fixed parameters
-            para_steps = [ len(xtr_v[0]), len(xtr_distr[0]) ]  
-            para_dims =  [ 1, len(xtr_distr[0][0])]
-            
-            clf = neural_mixture_lstm(sess, para_dense_dims, para_lstm_dims, para_lr_lstm, para_l2_lstm, \
-                                      para_batch_size_lstm, para_steps, para_dims, loss_type)
         
         else:
             print "     [ERROR] Need to specify a model"
             
-        
+            
         # initialize the network
         # reset the model
         clf.train_ini()
+        clf.evaluate_variational_ini()
+        
         
         # set up training batch parameters
         total_cnt   = np.shape(xtrain)[0]
@@ -174,29 +116,40 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
                 batch_v     =  xtr_v[ batch_idx ]
                 batch_distr =  xtr_distr[ batch_idx ]
                 
-                # log transformation on the target
-                if para_y_log == True:
-                    batch_y = log(ytrain[batch_idx]+1e-5)
-                else:
-                    batch_y = ytrain[batch_idx]
+                batch_y = ytrain[batch_idx]
             
-                tmpc += clf.train_batch( batch_v, batch_distr, batch_y, para_keep_prob )
+                #tmpc += clf.train_batch( batch_v, batch_distr, batch_y, para_keep_prob )
+                
+                # bayesian test
+                #print '----- variable to optimize: ', clf.test( batch_v, batch_distr, batch_y, para_keep_prob )
+                clf.train_varitational( batch_v, batch_distr, batch_y, para_keep_prob )
+                
+                #break
+            
+            #break
             
             #?
-            tmp_train_acc = clf.inference(xtr_v, xtr_distr, ytrain, para_keep_prob)
+            tmp_train_acc = clf.evaluate_metric(xtr_v, xtr_distr, ytrain, para_keep_prob)
             #?
-            tmp_test_acc  = clf.inference(xts_v, xts_distr, ytest,  para_keep_prob) 
+            tmp_test_acc  = clf.evaluate_metric(xts_v, xts_distr, ytest,  para_keep_prob) 
+            
+            y_hat = clf.predict(xts_v, xts_distr,  para_keep_prob) 
+            
+            print ytest[:10]
+            print y_hat[0][:10]
             
             # record for re-tratining the model afterwards
-            tmp_test_err.append( [epoch, sqrt(tmp_train_acc[0]), sqrt(tmp_test_acc[0]), tmpc] )
+            #tmp_test_err.append( [epoch, sqrt(tmp_train_acc), sqrt(tmp_test_acc), tmpc] )
             
-            print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, sqrt(tmp_train_acc[0]), tmp_train_acc[1],\
-            sqrt(tmp_test_acc[0]), tmp_test_acc[1] 
+            print "loss on epoch ", epoch, " : ", sqrt(tmp_train_acc), sqrt(tmp_test_acc)
             
         print "Optimization Finished!"
         
+        #clf.varitational_eval(xts_v[:10], xts_distr[:10], ytest[:10],  para_keep_prob) 
+        
+        
         # the model at the best parameter above
-        best_epoch = min(tmp_test_err, key = lambda x:x[2])[0]
+        #best_epoch = min(tmp_test_err, key = lambda x:x[2])[0]
         
         # reset the model
         clf.model_reset()
@@ -206,150 +159,11 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
     # clear the graph in the current session
     tf.reset_default_graph()
     sess = tf.InteractiveSession()
-
-    return best_epoch, min(tmp_test_err, key = lambda x:x[2])
+    
+    return 0
+    #return best_epoch, min(tmp_test_err, key = lambda x:x[2])
     
     
-    
-# retrain the model with the best parameter set-up        
-def validate_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest, file_addr, model_file, best_epoch ): 
-    
-    # stabilize the network by fixing the random seed
-    # fixing the seed will settle down all the random parameters over the entire routine below
-    np.random.seed(1)
-    tf.set_random_seed(1)
-    
-    print "Re-train the model at epoch ", best_epoch
-    
-    with tf.Session() as sess:
-        
-        if method == 'linear':
-            clf = mixture_linear(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
-                                  para_order_distr, para_order_steps, para_y_log, para_bool_bilinear,\
-                                  para_loss_type, para_distr_type)
-            
-            para_n_epoch = para_n_epoch_linear
-            para_batch_size = para_batch_size_linear
-            para_keep_prob = 1.0
-            
-            model_file += '_linear_lk.ckpt'
-            
-            
-        elif method == 'mlp':
-            clf = neural_mixture_dense(sess, para_n_hidden_list_mlp, para_lr_mlp, para_l2_mlp, para_batch_size_mlp,\
-                                       para_order_v, para_order_distr )
-            para_n_epoch = para_n_epoch_mlp
-            para_batch_size = para_batch_size_mlp
-            para_keep_prob = para_keep_prob_mlp
-            
-            model_file += '_linear_mlp.ckpt'
-        
-        elif method == 'lstm':
-            
-            model_file += '_lstm.ckpt'
-            
-            # reshape the data for lstm
-            if len(np.shape(xtr_v))==2:
-                xts_v = np.expand_dims( xts_v, 2 )
-                xtr_v = np.expand_dims( xtr_v,  2 )
-            
-            print '---- Data shape for Mixture LSTM: '
-            print np.shape(xtr_v), np.shape(xtr_distr)
-            print np.shape(xts_v), np.shape(xts_distr)
-            
-            para_n_epoch    = para_n_epoch_lstm
-            para_batch_size = para_batch_size_lstm
-            para_keep_prob = para_keep_prob_lstm
-            
-            # fixed parameters
-            para_steps = [ len(xtr_v[0]), len(xtr_distr[0]) ]  
-            para_dims =  [ 1, len(xtr_distr[0][0])]
-            
-            clf = neural_mixture_lstm(sess, para_dense_dims, para_lstm_dims, para_lr_lstm, para_l2_lstm, \
-                                      para_batch_size_lstm, para_steps, para_dims, loss_type)
-        else:
-            print "     [ERROR] Need to specify a model"
-            
-            
-        # initialize the network
-        clf.train_ini()
-        
-        # setup mini-batch parameters
-        total_cnt   = np.shape(xtrain)[0]
-        total_batch = int(total_cnt/para_batch_size)
-        total_idx   = range(total_cnt)
-
-        # training the model until the best epoch
-        for epoch in range(best_epoch+1):
-            
-            # shuffle traning instances each epoch
-            np.random.shuffle(total_idx)
-            
-            # Loop over all batches
-            tmpc = 0.0
-            for i in range(total_batch):
-                batch_idx = total_idx[ i*para_batch_size: (i+1)*para_batch_size ] 
-            
-                batch_v    =  xtr_v[ batch_idx ]
-                batch_distr=  xtr_distr[ batch_idx ]
-                
-                if para_y_log == True:
-                    batch_y = log(ytrain[batch_idx]+1e-5)
-                else:
-                    batch_y = ytrain[batch_idx]
-            
-                tmpc += clf.train_batch( batch_v, batch_distr, batch_y, para_keep_prob )
-                
-                
-            #?
-            tmp_train_acc = clf.inference(xtr_v, xtr_distr, ytrain, para_keep_prob)
-            #?
-            tmp_test_acc  = clf.inference(xts_v, xts_distr, ytest,  para_keep_prob) 
-            
-            print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, sqrt(tmp_train_acc[0]), tmp_train_acc[1],\
-            sqrt(tmp_test_acc[0]), tmp_test_acc[1] 
-        
-        print "Model Re-training Finished!"
-        
-        # record prediction and mixture gate values 
-        py_test = clf.predict(xts_v, xts_distr, para_keep_prob)
-        tmp = np.concatenate( [np.expand_dims(ytest, -1), np.transpose(py_test, [1, 0])], 1 )
-        np.savetxt( file_addr + "pytest_mix.txt", tmp, delimiter=',')
-        
-        py_train = clf.predict(xtr_v, xtr_distr, para_keep_prob)
-        tmp = np.concatenate( [np.expand_dims(ytrain, -1), np.transpose(py_train, [1, 0])], 1 )
-        np.savetxt( file_addr + "pytrain_mix.txt", tmp, delimiter=',')
-        
-        gates_test = clf.predict_gates(xts_v, xts_distr, para_keep_prob)
-        np.savetxt( file_addr + "gate_test.txt", gates_test, delimiter=',')
-        
-        gates_train = clf.predict_gates(xtr_v, xtr_distr, para_keep_prob)
-        np.savetxt( file_addr + "gate_train.txt", gates_train, delimiter=',')
-        
-        
-        # collect the values of all optimized parameters
-        if train_mode == 'oneshot':
-                   
-            print 'prediction \n', clf.collect_coeff_values("mean")
-            print 'variance \n', clf.collect_coeff_values("sig")
-            print 'gate \n', clf.collect_coeff_values("gate")
-            
-        else:
-            
-            w1 = clf.collect_coeff_values("mean")
-            np.asarray(w1[1]).dump( file_addr + "weight_pre_mix.dat" )
-            
-            w2 = clf.collect_coeff_values("gate")
-            np.asarray(w2[1]).dump( file_addr + "weight_gate_mix.dat" )
-            
-        # reset the model 
-        clf.model_reset()
-        
-    # clear the graph in the current session    
-    tf.reset_default_graph()
-    sess = tf.InteractiveSession()
-        
-        
 def preprocess_feature_mixture(xtrain, xtest):
     
     # split training and testing data into three feature groups      
@@ -454,8 +268,8 @@ elif train_mode == 'roll' or 'incre':
     
     
     # the main loop
-    #
-    for i in range(roll_len + 1, interval_num + 1):
+    #interval_num + 1
+    for i in range(roll_len + 1, roll_len + 2):
         
         # reset the graph
         tf.reset_default_graph()
@@ -521,16 +335,16 @@ elif train_mode == 'roll' or 'incre':
         # return lowest prediction errors and llk 
         best_epoch, tmp_error = train_mixture( xtr, xtr_exter, np.asarray(ytrain), xts, xts_exter, np.asarray(ytest) )
         
-        validate_mixture( xtr, xtr_exter, np.asarray(ytrain), xts, xts_exter, np.asarray(ytest),\
-                                       pred_file, model_file, best_epoch )
         
-        print 'best performance: ', tmp_error
+        '''
+        print tmp_error
         
         # save overall errors
         with open(res_file, "a") as text_file:
             text_file.write( "Mixture %s  %s %s %s : %s  \n"%(method, para_loss_type, para_distr_type, 
                                                               'bi-linear' if para_bool_bilinear else 'linear', \
                                                               str(tmp_error)) )
+       '''
         
 else:
     print '[ERROR] training mode'

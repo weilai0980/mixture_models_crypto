@@ -111,26 +111,39 @@ Baseline:
   aggregate to the same grnularity, gaussian process 
   
 
+Bayeisan variational
+
+
 ---- To Do ----
+
+Implementation: 
+   
+   test constant variance 
+
+   proximal gradient for lasso 
+   Bayeisan gibbs
+
+   derivation of mixture variance 
+
+   posterior probability of hidden state
+
+
 
 proof of convex of loss function 
 
 Baseline: dynamical linear system, phrophet, ARIMA+GARCH
 
-proximal gradient for lasso 
-Bayeisan way 
-
-derivation of mixture variance 
-
-posterior probability of hidden state
-
 survey KDD, ICDM
 
 multi-step ahead: order book effect decreases
 
-
+Neural approach:
+   
+  relu or linear output activation
 
 Evaluation:
+
+  evaluation on non-negative mean regularization 
 
   when the difference between mixture and baseline is close, pattern of order book 
 
