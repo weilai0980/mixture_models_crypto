@@ -27,6 +27,8 @@ para_order_hour = 16
 bool_feature_selection = False
 
 para_bool_bilinear = True
+# by relu
+para_activation_type = ''
 # ----
 
 
@@ -39,6 +41,10 @@ para_distr_type = str(sys.argv[3])
 #'log', 'norm'
 train_mode = str(sys.argv[4])
 # oneshot, roll, incre
+
+if len(sys.argv)>5:
+    para_activation_type = str(sys.argv[5])
+
 
 # ---- common parameters ----
 
@@ -110,7 +116,7 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
         if method == 'linear':
             clf = mixture_linear(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
                                   para_order_distr, para_order_steps, para_y_log, para_bool_bilinear,\
-                                  para_loss_type, para_distr_type)
+                                  para_loss_type, para_distr_type, para_activation_type)
             
             para_n_epoch = para_n_epoch_linear
             para_batch_size = para_batch_size_linear
@@ -226,7 +232,7 @@ def validate_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest, file_ad
         if method == 'linear':
             clf = mixture_linear(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_v, \
                                   para_order_distr, para_order_steps, para_y_log, para_bool_bilinear,\
-                                  para_loss_type, para_distr_type)
+                                  para_loss_type, para_distr_type, para_activation_type)
             
             para_n_epoch = para_n_epoch_linear
             para_batch_size = para_batch_size_linear

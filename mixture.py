@@ -48,7 +48,7 @@ def linear( x, dim_x, scope, bool_bias ):
             h = tf.matmul(x, w) + b
         else:
             h = tf.matmul(x, w)
-            
+           
         #l2
         regularizer = tf.nn.l2_loss(w)
             
@@ -151,7 +151,7 @@ def bilinear_with_external( x, shape_one_x, exter, exter_dim, scope, bool_bias )
 class mixture_linear():
 
     def __init__(self, session, lr, l2, batch_size, order_v, order_distr, order_steps, bool_log, bool_bilinear, \
-                loss_type, distr_type):
+                loss_type, distr_type, activation_type):
         
         # build the network graph 
         self.LEARNING_RATE = lr
@@ -192,6 +192,17 @@ class mixture_linear():
         else:
             mean_distr, regu_d_mean = linear_predict(self.distr, order_distr, 'mean_distr', True)
 
+        
+        # activation 
+        if activation_type == 'relu':
+            mean_distr = tf.nn.relu(mean_distr)
+            mean_v     = tf.nn.relu(mean_v)
+            
+        elif activation_type == 'leaky_relu':
+            mean_distr = tf.nn.leaky_relu(mean_distr)
+            mean_v     = tf.nn.leaky_relu(mean_v)
+            
+        
         # concatenate individual means 
         self.mean_stack = tf.stack( [mean_v, mean_distr], 1 )
         mean_stack = tf.stack( [mean_v, mean_distr], 1 )
@@ -275,6 +286,8 @@ class mixture_linear():
         
         # --- regularization
         
+        # temporal coherence, diversity 
+        
         # gate smoothness 
         logit_v_diff = logit_v[1:]-logit_v[:-1]
         logit_d_diff = logit_d[1:]-logit_d[:-1]
@@ -305,20 +318,30 @@ class mixture_linear():
                             0.0001*(regu_v_gate) + 0.0001*(regu_d_gate[0] + regu_d_gate[1])\
                             + 0.001*regu_mean_pos\
                             #+ 0.0001*regu_mean_diver
-            
+                            
             elif loss_type == 'lk' and distr_type == 'norm':
                 
                 self.regu = 0.1*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
                         0.001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
-                        + 0.00001*(regu_v_var + regu_d_var)\
-                        + 0.001*regu_mean_pos\
-                        #+ 0.001*regu_mean_diver
+                        + 0.00001*(regu_v_var + regu_d_var)
+                        #+ 0.001*regu_mean_diver   
                         
+                # activation 
+                if activation_type == 'relu':
+                    self.regu = self.regu
+                
+                elif activation_type == 'leaky_relu':
+                    self.regu += 0.001*regu_mean_pos
+                    
+                elif activation_type == '':
+                    self.regu += 0.001*regu_mean_pos
+                    
+                            
             elif loss_type == 'sq' and distr_type == 'log':
                 
                 self.regu = 0.01*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.00001*(regu_d_mean[1])+\
                         0.001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])
-            
+                    
             
             elif loss_type == 'lk' and distr_type == 'log':
                 
@@ -370,7 +393,6 @@ class mixture_linear():
             
             self.var_hat = mix_sq_mean - tf.square(self.y_hat)
             
-        
         elif distr_type == 'log':
             
             # mean and prediction
@@ -428,8 +450,8 @@ class mixture_linear():
         else:
             print '[ERROR] loss type'
         
-        
-        self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.loss)
+        self.train = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE)
+        self.optimizer =  self.train.minimize(self.loss)
         
         self.init = tf.global_variables_initializer()
         self.sess.run(self.init)
@@ -496,26 +518,45 @@ scope_name = ['mean_v', 'mean_distr', 'sig_v', 'sig_distr', 'gate_v', 'gate_dist
 posterior_id = ['sig_distr/b/', 'mean_v/b/', 'gate_distr/w_l/', 'mean_distr/w_l/', 'gate_distr/w_r/', 'sig_v/b/', 'mean_distr/b/', 'mean_v/w/', 'gate_v/w/', 'mean_distr/w_r/', 'sig_v/w/', 'gate_v/b/', 'gate_distr/b/', 'sig_distr/w/']
 
 # can be used for posterior expectation
-def bayesian_linear(x, dim_x, scope, bool_bias, dict_var, w_sample, b_sample):
+def bayesian_linear(x, dim_x, scope, bool_bias, dict_var, w_sample, b_sample, infer_type):
     
     with tf.variable_scope(scope):
         
+        # for training phase
         if w_sample == None and b_sample == None:
             # prior
             w = Normal(loc=tf.zeros([dim_x, 1]), scale=tf.ones([dim_x, 1]) )
             b = Normal(loc=tf.zeros([1,]), scale=tf.ones([1,]) )    
-
+            
             # variational posterior
-            qW = Normal(name = 'w', loc=tf.get_variable("qW/loc", [dim_x, 1]), \
+            if infer_type == 'variational':
+                
+                qW = Normal(name = 'w', loc=tf.get_variable("qW/loc", [dim_x, 1]), \
                     scale= tf.ones([dim_x, 1]))
-            #tf.nn.softplus(tf.get_variable("qW/scale", [dim_x, 1])))
-            qb = Normal(name = 'b', loc=tf.get_variable("qb/loc", [1,]), \
+                
+                #tf.nn.softplus(tf.get_variable("qW/scale", [dim_x, 1])))
+                qb = Normal(name = 'b', loc=tf.get_variable("qb/loc", [1,]), \
                         scale=tf.ones([1,]))
                     #scale=tf.nn.softplus(tf.get_variable("qb/scale", [1,])))
         
-            dict_var.update({w:qW})
-            dict_var.update({b:qb})
+                dict_var.update({w:qW})
+                dict_var.update({b:qb})
+            
+            # gibbs posterior
+            elif infer_type == 'gibbs':
+                
+                T = 500  # number of MCMC samples
+                qW = Empirical(tf.get_variable("qW/loc", [T, dim_x, 1], initializer = tf.constant_initializer(1.0 / K)))
+                qb = Empirical(tf.get_variable("qb/loc", [T, 1], initializer = tf.zeros_initializer()))
+                
+                dict_var.update({w:qW})
+                dict_var.update({b:qb})
+                
+            else:
+                print '---- [ERROR] inference type error'
+                
         
+        # for inference phase
         # given weight samples
         else:
             w = w_sample
@@ -528,8 +569,9 @@ def bayesian_linear(x, dim_x, scope, bool_bias, dict_var, w_sample, b_sample):
         
     return h
     
-def bayesian_bilinear(x, shape_one_x, scope, bool_bias, dict_var, wl_sample, wr_sample, b_sample):
+def bayesian_bilinear(x, shape_one_x, scope, bool_bias, dict_var, wl_sample, wr_sample, b_sample, infer_type):
     
+    # for training phase
     with tf.variable_scope(scope):
         
         if wl_sample == None and wr_sample == None and b_sample == None:
@@ -538,22 +580,43 @@ def bayesian_bilinear(x, shape_one_x, scope, bool_bias, dict_var, wl_sample, wr_
             w_l = Normal(loc=tf.zeros([shape_one_x[0], 1]), scale=tf.ones([shape_one_x[0], 1]))
             w_r = Normal(loc=tf.zeros([shape_one_x[1], 1]), scale=tf.ones([shape_one_x[1], 1]))
             b = Normal(loc=tf.zeros([1,]), scale=tf.ones([1,])) 
-        
+            
             # variational posterior
-            qW_l = Normal(name = 'w_l', loc=tf.get_variable("qW_t/loc", [shape_one_x[0], 1]), \
+            if infer_type == 'variational':
+                
+                qW_l = Normal(name = 'w_l', loc=tf.get_variable("qW_t/loc", [shape_one_x[0], 1]), \
                           scale=tf.ones([shape_one_x[0], 1]))
                       #scale=tf.nn.softplus(tf.get_variable("qW_t/scale",[shape_one_x[0], 1])))
-            qW_r = Normal(name = 'w_r', loc=tf.get_variable("qW_v/loc", [shape_one_x[1], 1]), \
+                qW_r = Normal(name = 'w_r', loc=tf.get_variable("qW_v/loc", [shape_one_x[1], 1]), \
                           scale=tf.ones([shape_one_x[1], 1]) )
                       #scale=tf.nn.softplus(tf.get_variable("qW_v/scale", [shape_one_x[1], 1])))
-            qb   = Normal(name = 'b', loc=tf.get_variable("qb/loc", [1,]),\
+                qb   = Normal(name = 'b', loc=tf.get_variable("qb/loc", [1,]),\
                           scale=tf.ones([1,]) )
                       #scale=tf.nn.softplus(tf.get_variable("qb/scale", [1,])))
         
-            dict_var.update({w_l : qW_l})
-            dict_var.update({w_r : qW_r})
-            dict_var.update({b : qb})
-        
+                dict_var.update({w_l : qW_l})
+                dict_var.update({w_r : qW_r})
+                dict_var.update({b : qb})
+            
+            # gibbs posterior
+            elif infer_type == 'gibbs':
+                
+                T = 500  # number of MCMC samples
+                qW_l = Empirical(tf.get_variable("qW_t/loc", [T, shape_one_x[0], 1], \
+                                                 initializer = tf.constant_initializer(1.0 / K)))
+                qW_r = Empirical(tf.get_variable("qW_v/loc", [T, shape_one_x[1], 1], \
+                                                 initializer = tf.constant_initializer(1.0 / K)))
+                qb   = Empirical(tf.get_variable("qb/loc", [T, 1], initializer = tf.zeros_initializer()))
+                
+                dict_var.update({w_l : qW_l})
+                dict_var.update({w_r : qW_r})
+                dict_var.update({b : qb})
+                
+            else:
+                print '---- [ERROR] inference type error'
+
+                
+        # for inference phase
         # given weight samples
         else:
             w_l = wl_sample
@@ -574,7 +637,7 @@ def bayesian_bilinear(x, shape_one_x, scope, bool_bias, dict_var, wl_sample, wr_
 class variational_mixture_linear():
 
     def __init__(self, session, lr, l2, batch_size, order_v, order_distr, order_steps, bool_log, bool_bilinear, \
-                loss_type, distr_type, eval_sample):
+                loss_type, distr_type, eval_sample, infer_type):
         
         # build the network graph 
         self.LEARNING_RATE = lr
@@ -611,13 +674,13 @@ class variational_mixture_linear():
         # --- prediction of individual models
 
         # models on individual feature groups
-        mean_v = bayesian_linear(self.v_auto, order_v, 'mean_v', True, self.dict_var, None, None)
+        mean_v = bayesian_linear(self.v_auto, order_v, 'mean_v', True, self.dict_var, None, None, infer_type)
         
         if bool_bilinear == True:
             mean_distr = bayesian_bilinear(self.distr, [order_steps, order_distr], 'mean_distr', True, self.dict_var, None,\
-                                           None, None)
+                                           None, None, infer_type)
         else:
-            mean_distr = bayesian_linear(self.distr, order_distr, 'mean_distr', True, self.dict_var, None, None)
+            mean_distr = bayesian_linear(self.distr, order_distr, 'mean_distr', True, self.dict_var, None, None, infer_type)
 
         # concatenate individual means 
         # [N, 2]
@@ -627,8 +690,9 @@ class variational_mixture_linear():
         # --- variance of individual models
         
         # variance depedent on features 
-        varv = bayesian_linear(self.v_auto, order_v, 'sig_v', True, self.dict_var, None, None)
-        vardistr = bayesian_linear(flatten_d, order_steps*order_distr, 'sig_distr', True, self.dict_var, None, None)
+        varv = bayesian_linear(self.v_auto, order_v, 'sig_v', True, self.dict_var, None, None, infer_type)
+        vardistr = bayesian_linear(flatten_d, order_steps*order_distr, 'sig_distr', True, self.dict_var, None, None,\
+                                   infer_type)
             
         var_v = tf.square(varv)
         var_d = tf.square(vardistr)
@@ -641,12 +705,13 @@ class variational_mixture_linear():
         # --- gate weights of individual models
         
         # gate based on softmax        
-        logit_v = bayesian_linear(self.v_auto, order_v, 'gate_v', True, self.dict_var, None, None)
+        logit_v = bayesian_linear(self.v_auto, order_v, 'gate_v', True, self.dict_var, None, None, infer_type)
         
         if bool_bilinear == True:
-            logit_d = bayesian_bilinear(self.distr, [order_steps, order_distr], 'gate_distr', True, self.dict_var, None, None, None)
+            logit_d = bayesian_bilinear(self.distr, [order_steps, order_distr], 'gate_distr', True, self.dict_var, None, None,\
+                                        None, infer_type)
         else:
-            logit_d = bayesian_linear(self.distr, order_distr, 'gate_distr', True, self.dict_var, None, None)
+            logit_d = bayesian_linear(self.distr, order_distr, 'gate_distr', True, self.dict_var, None, None, infer_type)
         
         # [N, 2]
         self.logits = tf.concat([logit_v, logit_d], 1)
@@ -663,10 +728,7 @@ class variational_mixture_linear():
     #   initialize loss and optimization operations for training
     def train_ini(self):
         
-        self.init = tf.global_variables_initializer()
-        self.sess.run(self.init)
         #self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.loss)
-        
         
         #self.inference = ed.ReparameterizationKLqp(latent_vars = self.dict_var)
                                                    #, data = {self.bayes_y : self.y})
@@ -678,12 +740,37 @@ class variational_mixture_linear():
         #opti = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE)
         #self.inference.initialize(optimizer = opti)
         
+        
+        # -- test 
+        #inference.initialize(n_iter=n_batch * n_epoch, n_samples=5, scale={y: N / M})
+        
+        #self.inference = ed.ReparameterizationKLKLqp( latent_vars = self.dict_var, data = {self.bayes_y : self.y} )
+        
+        self.inference = ed.KLqp( latent_vars = self.dict_var, data = {self.bayes_y : self.y} )
+            
+        opti = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE)
+        
+        self.inference.initialize( optimizer = opti, n_iter= 200, n_samples = 5 )
+        #scale={y: N / M}
+        # --
+        
+        self.init = tf.global_variables_initializer()
+        self.sess.run(self.init)
+        
     
     # return loss
-    def train_varitational(self, v_train, distr_train, y_train, keep_prob):
+    def train_one_batch(self, v_train, distr_train, y_train, keep_prob):
         
+        # -- test
+        info_dict = self.inference.update({self.v_auto : v_train, self.distr : distr_train, self.y : y_train, \
+                                           self.keep_prob : keep_prob})
+        # --
+        
+        
+        '''
         # n_samples: int. Number of samples from variational model for calculating stochastic gradients.
         #inference.run(n_iter = 1, n_samples = 20)
+        
         
         #ed.KLqp( )
         #ReparameterizationKLqp
@@ -711,6 +798,8 @@ class variational_mixture_linear():
         #print '----- training loss: ', info_dict['loss']
         #self.sess.run([loss], feed_dict = {self.v_auto:v_train, self.distr:distr_train, self.y:y_train,\
         #                                   self.keep_prob:keep_prob })
+        '''
+        
         
     def evaluate_variational_ini(self):
         
@@ -737,13 +826,12 @@ class variational_mixture_linear():
             gate_d_w_r = dict_para_post['gate_distr/w_r/'].sample()
             gate_d_b = dict_para_post['gate_distr/b/'].sample()
             
-            
-            mean_v = bayesian_linear(self.v_auto, 0, '', True, {}, tf.cast(v_w, tf.float32), tf.cast(v_b, tf.float32))
+            mean_v = bayesian_linear(self.v_auto, 0, '', True, {}, tf.cast(v_w, tf.float32), tf.cast(v_b, tf.float32), '')
             mean_d = bayesian_bilinear(self.distr, 0, '', True, {}, tf.cast(d_w_l, tf.float32), tf.cast(d_w_r, tf.float32),\
                                      tf.cast(v_b, tf.float32))
             
             logit_v = bayesian_linear(self.v_auto, 0, '', True, {}, tf.cast(gate_v_w, tf.float32), \
-                                      tf.cast(gate_v_b, tf.float32))
+                                      tf.cast(gate_v_b, tf.float32), '')
             logit_d = bayesian_bilinear(self.distr, 0, '', True, {}, tf.cast(gate_d_w_l, tf.float32), 
                                         tf.cast(gate_d_w_r, tf.float32),\
                                         tf.cast(gate_d_b, tf.float32))
@@ -790,7 +878,6 @@ class variational_mixture_linear():
         return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test, \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
     
-    
     def model_reset(self):
         self.init = tf.global_variables_initializer()
         self.sess.run( self.init )
@@ -807,4 +894,7 @@ class variational_mixture_linear():
     
     
 #class mcmc_mixture_linear():
+
+#empirical mixture
+
     

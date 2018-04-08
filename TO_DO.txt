@@ -114,7 +114,19 @@ Baseline:
 Bayeisan variational
 
 
+TM-G + hard non-negative mean: relu
+TM-G + soft non-negative mean: regularization
+
+TM - bayes gibbs
+
 ---- To Do ----
+
+
+TM - empirical bayes 
+Bayes + relu
+
+prior on model weight 
+
 
 Implementation: 
    

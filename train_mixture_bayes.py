@@ -123,10 +123,6 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
                 # bayesian test
                 #print '----- variable to optimize: ', clf.test( batch_v, batch_distr, batch_y, para_keep_prob )
                 clf.train_varitational( batch_v, batch_distr, batch_y, para_keep_prob )
-                
-                #break
-            
-            #break
             
             #?
             tmp_train_acc = clf.evaluate_metric(xtr_v, xtr_distr, ytrain, para_keep_prob)
