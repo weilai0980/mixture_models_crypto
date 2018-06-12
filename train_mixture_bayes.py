@@ -113,8 +113,8 @@ def train_mixture( xtr_v, xtr_distr, ytrain, xts_v, xts_distr, ytest ):
                 
                 batch_idx = total_idx[ i*para_batch_size: (i+1)*para_batch_size ] 
             
-                batch_v     =  xtr_v[ batch_idx ]
-                batch_distr =  xtr_distr[ batch_idx ]
+                batch_v     = xtr_v[ batch_idx ]
+                batch_distr = xtr_distr[ batch_idx ]
                 
                 batch_y = ytrain[batch_idx]
             

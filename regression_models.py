@@ -678,13 +678,15 @@ def gp_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, tra
     
     print "\nStart to train Gaussian process"
     
+    # specify dimension-specific length-scale parameter
     kernel = 1.0*RBF(length_scale=41.8) + 1.0*RBF(length_scale=180) * ExpSineSquared(length_scale=1.44, periodicity=1) \
 + RationalQuadratic(alpha=17.7, length_scale=0.957) +  RBF(length_scale=0.138) + WhiteKernel(noise_level=0.0336)
     
     gp = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9, optimizer = 'fmin_l_bfgs_b', normalize_y = True )
     
     gp.fit(xtrain, ytrain)
-    #gp.kernel_, gp.alpha_
+    # if fit() method is not used, GP uses the parameters as arguments to do prediction 
+    # gp.kernel_, gp.alpha_
     
     print "Begin to evaluate Gaussian process regression"
     
@@ -776,13 +778,12 @@ def ewma_validate(ytrain, ytest, result_file, pred_file):
     pred_tr = []
     pred_ts = []
     
-    for alpha in [0.005, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+    for alpha in [0.005, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
         
-        his = 0.0
         diff_tr = []
         diff_ts = []
         
-        tmp_pred = ytrain[0]
+        tmp_pred = (1.0-alpha)*ytrain[0]
         
         tmp_pred_tr = []
         tmp_pred_ts = []
@@ -791,13 +792,14 @@ def ewma_validate(ytrain, ytest, result_file, pred_file):
         for i in ytrain:
             diff_tr.append(i-tmp_pred)
             tmp_pred_tr.append(tmp_pred)
-            tmp_pred = (1.0-alpha)*i + alpha*his
+            tmp_pred = (1.0-alpha)*i + alpha*tmp_pred
+            
         
         # testing phase
         for i in ytest:
             diff_ts.append(i-tmp_pred)
             tmp_pred_ts.append(tmp_pred)
-            tmp_pred = (1.0-alpha)*i + alpha*his
+            tmp_pred = (1.0-alpha)*i + alpha*tmp_pred
             
         
         diff_tr = np.asarray(diff_tr)
@@ -811,22 +813,21 @@ def ewma_validate(ytrain, ytest, result_file, pred_file):
     best_alpha = min(rmse, key = lambda x:x[2])[0]
     
     # retrain with the best parameter
-    
-    hist = 0.0
         
-    tmp_pred = ytrain[0]
+    tmp_pred = (1.0-alpha)*ytrain[0]
     tmp_pred_tr = []
     tmp_pred_ts = []
         
     # training phase
     for i in ytrain:
         tmp_pred_tr.append(tmp_pred)
-        tmp_pred = (1.0-best_alpha)*i + best_alpha*hist
+        tmp_pred = (1.0-best_alpha)*i + best_alpha*tmp_pred
         
     # testing phase
     for i in ytest:
         tmp_pred_ts.append(tmp_pred)
-        tmp_pred = (1.0-best_alpha)*i + best_alpha*hist
+        tmp_pred = (1.0-best_alpha)*i + best_alpha*tmp_pred
+        
     
     # save the overall errors
     with open(result_file, "a") as text_file:

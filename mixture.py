@@ -22,14 +22,15 @@ from tensorflow.python.ops import rnn_cell_impl
 from tensorflow.python.ops.rnn_cell_impl import * 
 
 
-import edward as ed
-from edward.models import (
-    Categorical, Dirichlet, Empirical, InverseGamma,
-    MultivariateNormalDiag, Normal, ParamMixture, Beta, Bernoulli, Mixture)
+#import edward as ed
+#from edward.models import (
+#    Categorical, Dirichlet, Empirical, InverseGamma,
+#    MultivariateNormalDiag, Normal, ParamMixture, Beta, Bernoulli, Mixture)
 
 
 # local packages
 from utils_libs import *
+from ts_mv_rnn_basics import *
 
 
 # reproducibility by fixing the random seed
@@ -314,18 +315,18 @@ class mixture_linear():
             
             if loss_type == 'sq' and distr_type == 'norm':
                 
-                self.regu = 0.001*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
-                            0.0001*(regu_v_gate) + 0.0001*(regu_d_gate[0] + regu_d_gate[1])\
+                self.regu = 0.01*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
+                            0.001*(regu_v_gate) + 0.0001*(regu_d_gate[0] + regu_d_gate[1])\
                             + 0.001*regu_mean_pos\
                             #+ 0.0001*regu_mean_diver
                             
             elif loss_type == 'lk' and distr_type == 'norm':
                 
-                self.regu = 0.1*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])+\
-                        0.001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
+                self.regu = 0.001*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.001*(regu_d_mean[1])\
+                        + 0.0001*(regu_v_gate) + 0.00001*(regu_d_gate[0] + regu_d_gate[1])\
                         + 0.00001*(regu_v_var + regu_d_var)
                         #+ 0.001*regu_mean_diver   
-                        
+                
                 # activation 
                 if activation_type == 'relu':
                     self.regu = self.regu
@@ -413,7 +414,7 @@ class mixture_linear():
         # --- errors metric
         
         # MSE
-        self.err = tf.losses.mean_squared_error( self.y, self.y_hat )
+        self.mse = tf.losses.mean_squared_error( self.y, self.y_hat )
         # MAPE
         #self.mape = tf.reduce_mean( tf.abs( (self.y - self.y_hat)/(self.y+1e-10) ) )
         
@@ -442,7 +443,7 @@ class mixture_linear():
         
         # loss
         if self.loss_type == 'sq':
-            self.loss = self.err + self.regu
+            self.loss = self.mse + self.regu
             
         elif self.loss_type == 'lk':
             self.loss = self.neg_logllk + self.regu
@@ -481,17 +482,17 @@ class mixture_linear():
         return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test, \
                                                     self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     
-    #   predict givn testing data
+    #   prediction
     def predict(self, v_test, distr_test, keep_prob):
         
         return self.sess.run( [self.y_hat, self.pre_v, self.pre_d], feed_dict = {self.v_auto:v_test, \
                                                        self.distr:distr_test,  self.keep_prob:keep_prob })
     
-    #   mixture gates givn testing data
+    #   mixture gates
     def predict_gates(self, v_test, distr_test, keep_prob):
         return self.sess.run( self.gates , feed_dict = {self.v_auto:v_test, \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
-    
+    #   mixture logits
     def predict_logit(self, v_test, distr_test, keep_prob):
         return self.sess.run( self.logit , feed_dict = {self.v_auto:v_test, \
                                                         self.distr:distr_test,  self.keep_prob:keep_prob })
@@ -641,7 +642,7 @@ class variational_mixture_linear():
         
         # build the network graph 
         self.LEARNING_RATE = lr
-                
+                 
         self.N_BATCH = batch_size
         self.L2 = l2
    
@@ -728,21 +729,7 @@ class variational_mixture_linear():
     #   initialize loss and optimization operations for training
     def train_ini(self):
         
-        #self.optimizer = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.loss)
-        
-        #self.inference = ed.ReparameterizationKLqp(latent_vars = self.dict_var)
-                                                   #, data = {self.bayes_y : self.y})
-        #                                                                           self.v_auto:v_train,\
-        #                                                                           self.distr:distr_train,\
-        #                                                                           self.y:y_train,\
-        #                                                                           self.keep_prob:keep_prob}
-        
-        #opti = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE)
-        #self.inference.initialize(optimizer = opti)
-        
-        
         # -- test 
-        #inference.initialize(n_iter=n_batch * n_epoch, n_samples=5, scale={y: N / M})
         
         #self.inference = ed.ReparameterizationKLKLqp( latent_vars = self.dict_var, data = {self.bayes_y : self.y} )
         
@@ -765,7 +752,6 @@ class variational_mixture_linear():
         info_dict = self.inference.update({self.v_auto : v_train, self.distr : distr_train, self.y : y_train, \
                                            self.keep_prob : keep_prob})
         # --
-        
         
         '''
         # n_samples: int. Number of samples from variational model for calculating stochastic gradients.
@@ -800,7 +786,6 @@ class variational_mixture_linear():
         #                                   self.keep_prob:keep_prob })
         '''
         
-        
     def evaluate_variational_ini(self):
         
         tmp_var_post = self.dict_var.values()
@@ -808,7 +793,7 @@ class variational_mixture_linear():
         for item in tmp_var_post:
             dict_para_post.update({item.name: item})
             
-        #['sig_distr/b/', 'mean_v/b/', 'gate_distr/w_l/', 'mean_distr/w_l/', 'gate_distr/w_r/', 'sig_v/b/', 'mean_distr/b/', 'mean_v/w/', 'gate_v/w/', 'mean_distr/w_r/', 'sig_v/w/', 'gate_v/b/', 'gate_distr/b/', 'sig_distr/w/']
+        #['sig_distr/b/', 'mean_v/b/', 'gate_distr/w_l/', 'mean_distr/w_l/', 'gate_distr/w_r/', 'sig_v/b/', 'mean_distr/b/',\'mean_v/w/', 'gate_v/w/', 'mean_distr/w_r/', 'sig_v/w/', 'gate_v/b/', 'gate_distr/b/', 'sig_distr/w/']
         
         for i in range(self.eval_sample):
             
@@ -835,6 +820,7 @@ class variational_mixture_linear():
             logit_d = bayesian_bilinear(self.distr, 0, '', True, {}, tf.cast(gate_d_w_l, tf.float32), 
                                         tf.cast(gate_d_w_r, tf.float32),\
                                         tf.cast(gate_d_b, tf.float32))
+            
             
             # [N, 2]
             logits = tf.concat([logit_v, logit_d], 1)
@@ -892,9 +878,4 @@ class variational_mixture_linear():
         return self.sess.run([tf.shape(self.logit)], feed_dict = {self.v_auto:v_test, \
                                                     self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     
-    
-#class mcmc_mixture_linear():
-
-#empirical mixture
-
     

@@ -689,12 +689,17 @@ def orderbook_stat_features(all_dta_minu, tmp_idx):
     f = []
     f.append(bid_ask_spread(all_dta_minu, tmp_idx))
     f.append(bid_ask_spread_weighted(all_dta_minu, tmp_idx))
+    
     f.append(market_depth_a_volume(tmp_a))
     f.append(market_depth_b_volume(tmp_b))
+    # absolute value ?
     f.append(market_depth_a_volume(tmp_a)-market_depth_b_volume(tmp_b))
+    
     f.append(market_depth_a_btc(tmp_a))
     f.append(market_depth_b_btc(tmp_b))
+    # absolute value ?
     f.append(market_depth_a_btc(tmp_a)-market_depth_b_btc(tmp_b))
+    
     cum_bid, cum_ask = bid_ask_slope(all_dta_minu, tmp_idx)
     f.append(cum_bid)
     f.append(cum_ask)

@@ -11,10 +11,13 @@ from regression_models import *
 
 # ONLY USED FOR ROLLING EVALUATION
 # ---- parameter set-up for preparing trainning and testing data ----
-para_order_minu = 50
+para_order_minu = 30
 para_order_hour = 16
 bool_feature_selection = False
 bool_add_feature = True
+
+para_step_ahead = 0
+
 # ----
 
 
@@ -28,26 +31,12 @@ bool_clf = False
 #    text_file.close()
 
 load_file_postfix = "v_minu_reg"
-model_list = ['gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge', 'ewma']
+model_list = ['gbt', 'rf', 'xgt', 'enet', 'ewma']
 # 'gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge', 'lasso'
 
 def train_eval_models( xtrain, ytrain, xtest, ytest ):
     
     best_err_ts = []
-    
-    
-    # GBT gradient boosted tree
-    #tmperr = gbt_train_validate(xtrain, ytrain, xtest, ytest, 0.0, bool_clf, result_file, model_file + '_gbt.sav', file_path)
-    #best_err_ts.append(tmperr)
-    
-    # Random forest performance
-    #tmperr = rf_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, result_file, model_file + '_rf.sav', file_path)
-    #best_err_ts.append(tmperr)
-    
-    # XGBoosted extreme gradient boosted
-    #tmperr = xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, 0, result_file, model_file + '_xgt.sav', file_path)
-    #best_err_ts.append(tmperr)
-    
    
     # log transformation of y
     log_ytrain = []
@@ -81,6 +70,19 @@ def train_eval_models( xtrain, ytrain, xtest, ytest ):
     # EWMA
     tmperr = ewma_validate(ytrain, ytest, result_file, file_path)
     best_err_ts.append(tmperr)
+    
+    
+    # GBT gradient boosted tree
+    #tmperr = gbt_train_validate(xtrain, ytrain, xtest, ytest, 0.0, bool_clf, result_file, model_file + '_gbt.sav', file_path)
+    #best_err_ts.append(tmperr)
+    
+    # Random forest performance
+    #tmperr = rf_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, result_file, model_file + '_rf.sav', file_path)
+    #best_err_ts.append(tmperr)
+    
+    # XGBoosted extreme gradient boosted
+    #tmperr = xgt_train_validate(xtrain, ytrain, xtest, ytest, bool_clf, 0, result_file, model_file + '_xgt.sav', file_path)
+    #best_err_ts.append(tmperr)
     
     return best_err_ts
 
@@ -121,10 +123,10 @@ elif train_mode == 'roll' or 'incre':
     # prepare pairs of features and targets
     if bool_add_feature == True:
         x, y, var_explain = prepare_feature_target( features_minu, rvol_hour, all_loc_hour, \
-                                                        para_order_minu, para_order_hour, bool_feature_selection, 0 )
+                                                    para_order_minu, para_order_hour, bool_feature_selection, para_step_ahead)
     else:
         x, y, var_explain = prepare_feature_target( [], rvol_hour, all_loc_hour, \
-                                                        para_order_minu, para_order_hour, bool_feature_selection, 0 )
+                                                    para_order_minu, para_order_hour, bool_feature_selection, para_step_ahead)
         
     # set up the interval parameters
     interval_len = 30*24

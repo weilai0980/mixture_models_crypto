@@ -111,24 +111,59 @@ Baseline:
   aggregate to the same grnularity, gaussian process 
   
 
-Bayeisan variational
-
 
 TM-G + hard non-negative mean: relu
 TM-G + soft non-negative mean: regularization
+TM-G: regularization
 
+TM - bayes variational 
 TM - bayes gibbs
 
 ---- To Do ----
 
 
-TM - empirical bayes 
-Bayes + relu
+Baseline:
 
-prior on model weight 
+  Time series forecasting using a hybrid ARIMA and neural network model
 
+Model interpretion:
+
+  characterizing when model prediction fails
+  
+  sparse softmax 
+
+
+
+Model ensemble:
+   based on y distribution in training data
+
+
+Bayesian version:
+  uncertainty analysis
+
+Neural version:
+  dynamics of hidden variables via an additional RNN 
+  Neural Machine Translation with Recurrent Attention Modeling
+
+Models:
+  TM - empirical bayes 
+  Bayes + relu
+  proximal optimization for feature selection 
+  prior on model weight 
+  
+  integrate hinge loss into variational bayes 
+  
+  ADAM gradient descent + proximal method 
+     ref: Ad Click Prediction: a View from the Trenches
+          The Simpler The Better: A Unified Approach to Predicting Original Taxi Demands based on Large-Scale Online Platforms
+          
+          
 
 Implementation: 
+
+   
+
+   reload all data and record month location 
    
    test constant variance 
 
@@ -140,14 +175,13 @@ Implementation:
    posterior probability of hidden state
 
 
-
 proof of convex of loss function 
 
 Baseline: dynamical linear system, phrophet, ARIMA+GARCH
 
 survey KDD, ICDM
 
-multi-step ahead: order book effect decreases
+multi-step ahead: order book effect decreases, quantify the effect horizon of different data
 
 Neural approach:
    
@@ -180,7 +214,7 @@ Evaluation:
   Wilcoxon signed-rank test
 
 
-Experiments steps:
+Experiment step-up:
   
   two month data 
     
@@ -196,8 +230,6 @@ Experiments steps:
   performance w.r.t. lag order of hourly volatility and minute features, feature selection dim, backward interval 
   
   
-reload all data and record month location 
-
 https://aksarkar.github.io/nwas/example.html
 
 confidence interval 
@@ -260,6 +292,9 @@ Neural Mixture:
 
 
 variance reduction in the estimator for sampling 
+
+
+
 
 
 ---- python math operators ----
