@@ -1,0 +1,2 @@
+interval_len, 720
+roll_len, 2

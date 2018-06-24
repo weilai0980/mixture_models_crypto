@@ -119,19 +119,35 @@ TM-G: regularization
 TM - bayes variational 
 TM - bayes gibbs
 
+
+
+Bayesian:
+  mixture regression 
+  temporal mixture regression 
+
 ---- To Do ----
 
 
 Baseline:
 
   Time series forecasting using a hybrid ARIMA and neural network model
+  
+  dynamical linear system, phrophet, ARIMA+GARCH, ARIMA + RNN
+
 
 Model interpretion:
 
   characterizing when model prediction fails
   
   sparse softmax 
-
+  
+  
+Regularization:
+  Automatic Relevance Determination
+  l1,2
+  group lasso, graphical lasso
+  
+  causal regularization 
 
 
 Model ensemble:
@@ -139,11 +155,24 @@ Model ensemble:
 
 
 Bayesian version:
+  Bayeisan gibbs
   uncertainty analysis
+
 
 Neural version:
   dynamics of hidden variables via an additional RNN 
   Neural Machine Translation with Recurrent Attention Modeling
+  fine tune
+  
+  relu or linear output activation
+  
+   attention
+   gate constraint, gate stability problem 
+   gate logit activaition from neural network 
+   smooth on expert gate: Learning Factored Representations in a Deep Mixture of Experts
+   activation on the last layer
+   bias in _linear function
+
 
 Models:
   TM - empirical bayes 
@@ -154,21 +183,19 @@ Models:
   integrate hinge loss into variational bayes 
   
   ADAM gradient descent + proximal method 
+     
      ref: Ad Click Prediction: a View from the Trenches
           The Simpler The Better: A Unified Approach to Predicting Original Taxi Demands based on Large-Scale Online Platforms
           
-          
 
 Implementation: 
-
-   
 
    reload all data and record month location 
    
    test constant variance 
 
    proximal gradient for lasso 
-   Bayeisan gibbs
+   
 
    derivation of mixture variance 
 
@@ -177,15 +204,12 @@ Implementation:
 
 proof of convex of loss function 
 
-Baseline: dynamical linear system, phrophet, ARIMA+GARCH
 
 survey KDD, ICDM
 
 multi-step ahead: order book effect decreases, quantify the effect horizon of different data
 
-Neural approach:
-   
-  relu or linear output activation
+  
 
 Evaluation:
 
@@ -235,23 +259,21 @@ https://aksarkar.github.io/nwas/example.html
 confidence interval 
 
 
-Regularization:
-  Automatic Relevance Determination
-  l1,2
-  group lasso, graphical lasso
+
   
  
 Evaluation metric:
+
    Average percenate error
    
    Likelihood:
-    GP
-    Regression
+     GP
+     Regression
 
-    ARIMA
-    Structural
+     ARIMA
+     Structural
 
-    Mixture
+     Mixture
     
 
 Mixture:
@@ -264,9 +286,6 @@ Mixture:
   Spike and slab 
   
 
-Bayesian:
-  mixture regression 
-  temporal mixture regression 
   
 Gaussain process volatility model 
 
@@ -281,18 +300,9 @@ Model variance reduction:
   https://stackoverflow.com/questions/45206910/tensorflow-exponential-moving-average
   https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
 
-Neural Mixture: 
-   attention
-   gate constraint, gate stability problem 
-   gate logit activaition from neural network 
-   smooth on expert gate: Learning Factored Representations in a Deep Mixture of Experts
-   activation on the last layer
-   bias in _linear function
-
 
 
 variance reduction in the estimator for sampling 
-
 
 
 

@@ -527,21 +527,28 @@ def enet_alpha_l1(alpha_range, l1_range, xtrain, ytrain, xtest, ytest, orig_ytra
     return min(res, key = lambda x:x[3]), res, best_pytest, best_model
 
 
-def elastic_net_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_file, trans_ytrain, pred_file):
+def elastic_net_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result_file, model_file, trans_ytrain, pred_file):
     print "\nStart to train ElasticNet"
     
-    tmp_range = [0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 1]
+    # training and validation phase
+    alpha_range = [0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 1]
+    l1_range = [0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 1]
     
     if len(trans_ytrain) != 0:
-        err_min, err_list, y_hat, model = enet_alpha_l1( tmp_range, tmp_range, \
-                                                    xtrain, trans_ytrain, xtest, ytest, ytrain)
+        err_min, err_list, y_hat, model = enet_alpha_l1( alpha_range, l1_range, \
+                                                         xtrain, trans_ytrain, xval, yval, ytrain)
     else:
-        err_min, err_list, y_hat, model = enet_alpha_l1( tmp_range, tmp_range, \
-                                                    xtrain, ytrain, xtest, ytest, [])
+        err_min, err_list, y_hat, model = enet_alpha_l1( alpha_range, l1_range, \
+                                                    xtrain, ytrain, xval, yval, [])
+    # testing phase    
+    if len(yval)!=0:
+        pytest  = model.predict( xtest )
+        err_min += (sqrt( mean((pytest - ytest)*(pytest - ytest)) ), )
+        
     # save the best model
     joblib.dump(model, model_file)
-        
-    print "RMSE:", err_min
+    
+    print "ENET RMSE:", err_min
     
     # save overall errors
     with open(result_file, "a") as text_file:
@@ -557,6 +564,7 @@ def elastic_net_train_validate(xtrain, ytrain, xtest, ytest, result_file, model_
     
     # return the least validation error 
     return err_min[3]
+
     
 # ++++ Bayesian regression ++++
 

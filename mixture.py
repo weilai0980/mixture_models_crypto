@@ -327,7 +327,8 @@ class mixture_linear():
                         + 0.00001*(regu_v_var + regu_d_var)
                         #+ 0.001*regu_mean_diver   
                 
-                # activation 
+                
+                # activation and hinge regularization 
                 if activation_type == 'relu':
                     self.regu = self.regu
                 
@@ -336,8 +337,8 @@ class mixture_linear():
                     
                 elif activation_type == '':
                     self.regu += 0.001*regu_mean_pos
-                    
-                            
+                
+                
             elif loss_type == 'sq' and distr_type == 'log':
                 
                 self.regu = 0.01*(regu_v_mean) + 0.001*(regu_d_mean[0]) + 0.00001*(regu_d_mean[1])+\
@@ -414,25 +415,11 @@ class mixture_linear():
         # --- errors metric
         
         # MSE
-        self.mse = tf.losses.mean_squared_error( self.y, self.y_hat )
+        self.mse  = tf.losses.mean_squared_error( self.y, self.y_hat )
         # MAPE
-        #self.mape = tf.reduce_mean( tf.abs( (self.y - self.y_hat)/(self.y+1e-10) ) )
+        self.mape = tf.reduce_mean( tf.abs( (self.y - self.y_hat)/(self.y+1e-10) ) )
         
-        '''
-        if bool_log == True:
-            # ?
-            self.y_hat = tf.reduce_sum(tf.multiply(tf.exp(pre), self.gates), 1)
-            #self.y_hat = tf.exp(tf.reduce_sum(tf.multiply(pre, self.gates), 1))
-            
-            self.pre_v = tf.exp(pre_v)
-            self.pre_d = tf.exp(pre_distr)
-            
-        else:
-            self.y_hat = tf.reduce_sum( tf.multiply(pre, self.gates), 1 )
-            
-            self.pre_v = pre_v
-            self.pre_d = pre_distr
-         '''   
+        
     
     def model_reset(self):
         self.init = tf.global_variables_initializer()
@@ -479,7 +466,7 @@ class mixture_linear():
     #   infer givn testing data
     def inference(self, v_test, distr_test, y_test, keep_prob):
         
-        return self.sess.run([self.err, self.regu], feed_dict = {self.v_auto:v_test, \
+        return self.sess.run([self.mse, self.regu], feed_dict = {self.v_auto:v_test, \
                                                     self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     
     #   prediction
@@ -512,7 +499,7 @@ class mixture_linear():
 
     
     
-# ---- Bayesian variational mixture linear ----
+# ---- Bayesian variational mixture linear Edward ----
 
 scope_name = ['mean_v', 'mean_distr', 'sig_v', 'sig_distr', 'gate_v', 'gate_distr']
 
@@ -879,3 +866,4 @@ class variational_mixture_linear():
                                                     self.distr:distr_test,  self.y:y_test, self.keep_prob:keep_prob })
     
     
+# ---- Non-positive regularized Bayesian variational mixture linear ----
