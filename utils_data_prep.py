@@ -5,6 +5,26 @@ from utils_libs import *
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
 
+# --- parameters ---
+
+def para_parser(para_path):
+    
+    with open(para_path, "r") as ins:
+        array = []
+        para_dict = {}
+    
+        for line in ins:
+            newline = line.strip('\n')
+            tmpline = newline.split(',')
+            
+            if tmpline[1] =='int':
+                para_dict.update( {tmpline[0]:int(tmpline[2])} )
+            elif tmpline[1] =='bool':
+                para_dict.update( {tmpline[0]: False if tmpline[2] == 'False' else True} )
+        
+        return para_dict
+
+
 # --- utilities ---
 def parse_date_time_minute(x):
     tmp = datetime.datetime.fromtimestamp(x/1000.0)
@@ -106,7 +126,7 @@ def prepare_feature_target(features_minu, vol_hour, all_loc_hour, \
     for i in range( order_hour + step_gap, tmpcnt ):
         y.append( vol_hour[i] )
         
-        x.append( [vol_hour[i - order_hour - step_gap : i - step_gap]] )
+        x.append( [ vol_hour[i - order_hour - step_gap : i - step_gap] ] )
         
         if len(features_minu)!=0:
             

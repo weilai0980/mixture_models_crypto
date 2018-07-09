@@ -1,2 +1,6 @@
-interval_len, 720
-roll_len, 2
+interval_len,int,720
+roll_len,int,2
+para_step_ahead,int,0
+para_order_minu,int,30
+para_order_hour,int,16
+bool_feature_selection,bool,False
