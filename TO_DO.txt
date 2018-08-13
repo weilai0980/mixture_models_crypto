@@ -119,14 +119,14 @@ TM-G: regularization
 TM - bayes variational 
 TM - bayes gibbs
 
-
-
 Bayesian:
   mixture regression 
   temporal mixture regression 
+  variational inference  
+
+relu or linear output activation
 
 ---- To Do ----
-
 
 Baseline:
 
@@ -141,6 +141,8 @@ Model interpretion:
   
   sparse softmax 
   
+  posterior probability of hidden state
+  
   
 Regularization:
   Automatic Relevance Determination
@@ -153,28 +155,33 @@ Regularization:
 Model ensemble:
    based on y distribution in training data
 
-
 Bayesian version:
-  Bayeisan gibbs
+  gibbs
   uncertainty analysis
 
 
 Neural version:
-  dynamics of hidden variables via an additional RNN 
-  Neural Machine Translation with Recurrent Attention Modeling
+  
+  * representation learning on raw order book data
+  * lstm-mixture  
+  * adaptive moving average logit 
+  
+  dynamics of hidden variables via an additional RNN : Neural Machine Translation with Recurrent Attention Modeling
+  
   fine tune
   
-  relu or linear output activation
-  
-   attention
-   gate constraint, gate stability problem 
-   gate logit activaition from neural network 
-   smooth on expert gate: Learning Factored Representations in a Deep Mixture of Experts
-   activation on the last layer
-   bias in _linear function
+  attention
+  gate constraint, gate stability problem 
+  gate logit activaition from neural network 
+  smooth on expert gate: Learning Factored Representations in a Deep Mixture of Experts
+  activation on the last layer
+  bias in _linear function
 
 
 Models:
+   
+  **hidden state difference
+
   TM - empirical bayes 
   Bayes + relu
   proximal optimization for feature selection 
@@ -186,7 +193,8 @@ Models:
      
      ref: Ad Click Prediction: a View from the Trenches
           The Simpler The Better: A Unified Approach to Predicting Original Taxi Demands based on Large-Scale Online Platforms
-          
+  
+  proximal gradient for lasso
 
 Implementation: 
 
@@ -194,23 +202,19 @@ Implementation:
    
    test constant variance 
 
-   proximal gradient for lasso 
-   
-
    derivation of mixture variance 
-
-   posterior probability of hidden state
 
 
 proof of convex of loss function 
 
-
 survey KDD, ICDM
 
-multi-step ahead: order book effect decreases, quantify the effect horizon of different data
+
+Multi-step ahead: 
+    
+    order book effect decreases, quantify the effect horizon of different data
 
   
-
 Evaluation:
 
   evaluation on non-negative mean regularization 

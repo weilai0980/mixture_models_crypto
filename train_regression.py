@@ -8,9 +8,7 @@ from utils_libs import *
 from utils_data_prep import *
 from regression_models import *
 
-# ONLY USED FOR ROLLING EVALUATION
-
-# ---- parameter set-up for preparing trainning and testing data ----
+# --- parameter set-up from parameter-file ---
 
 # load the parameter file
 para_dict = para_parser("para_file.txt")
@@ -19,6 +17,7 @@ para_order_minu = para_dict['para_order_minu']
 para_order_hour = para_dict['para_order_hour']
 bool_feature_selection = para_dict['bool_feature_selection']
 
+# ONLY USED FOR ROLLING EVALUATION
 interval_len = para_dict['interval_len']
 roll_len = para_dict['roll_len']
 
@@ -38,10 +37,15 @@ bool_clf = False
 #    text_file.close()
 
 load_file_postfix = "v_minu_reg"
-model_list = ['rf', 'xgt', 'enet', 'ewma', 'bayes', 'ridge', 'lasso', 'gp']
-# 'gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge', 'lasso'
+model_list = ['rf', 'xgt', 'gbt', 'enet', 'ewma', 'bayes', 'ridge', 'lasso']
+# 'gbt', 'rf', 'xgt', 'gp', 'bayes', 'enet', 'ridge', 'lasso', 'ewma'
 
 def train_eval_models( xtrain, ytrain, xval, yval, xtest, ytest, autotrain, autoval, autotest ):
+    
+    '''
+    Argu: numpy array
+    
+    '''
     
     best_err_ts = []
    
@@ -83,9 +87,9 @@ def train_eval_models( xtrain, ytrain, xval, yval, xtest, ytest, autotrain, auto
     
     # EWMA
     if 'ewma' in model_list:
-        
         if para_step_ahead != 0 or len(xtest) != 0: 
-            tmperr = ewma_instance_validate(autotrain, ytrain, autoval, yval, autotest, ytest, result_file, pred_file)
+            tmperr = ewma_instance_validate(autotrain, ytrain, autoval, yval, autotest, ytest, result_file, file_path)
+        
         else:
             tmperr = ewma_validate(ytrain, yval, result_file, file_path)
             
@@ -114,6 +118,7 @@ def train_eval_models( xtrain, ytrain, xval, yval, xtest, ytest, autotrain, auto
 
 
 # --- main process ---
+
 # oneshot, roll, incre
 train_mode = str(sys.argv[1])
 
@@ -158,6 +163,10 @@ elif train_mode == 'roll' or 'incre':
     interval_num = int(len(y)/interval_len)
     print np.shape(x), np.shape(y), interval_len, interval_num
     
+    # prepare the log
+    with open(result_file, "a") as text_file:
+        text_file.write("\n %s "%( "\n -------- Rolling --------- \n" if train_mode == 'roll' else "\n -------- Incremental --------- \n"))
+    
     # the main loop 
     for i in range(roll_len + 1, interval_num+1):
         
@@ -167,7 +176,7 @@ elif train_mode == 'roll' or 'incre':
         print '\n --- In processing of interval ', i-1, ' --- \n'
         
         with open(result_file, "a") as text_file:
-            text_file.write( "Interval %d :\n" %(i-1) )
+            text_file.write( "\n Interval %d :\n" %(i-1) )
         
         if train_mode == 'roll':
             tmp_x = x[(i-roll_len-1)*interval_len: i*interval_len]
@@ -184,12 +193,12 @@ elif train_mode == 'roll' or 'incre':
         
         # auto-regressive part
         auto = [ j[0] for j in tmp_x ]
-        auto_tr = auto[:int(train_split_ratio*len(y))] 
-        auto_test = auto[int(train_split_ratio*len(y)):]
+        auto_tr = auto[:int(para_train_split_ratio*len(tmp_y))] 
+        auto_test = auto[int(para_train_split_ratio*len(tmp_y)):]
         
         # split data, normalization
         xtr, ytr, xtest, ytest = training_testing_plain_regression(tmp_x, tmp_y, para_train_split_ratio)
-        print np.shape(xtr), np.shape(ytr), np.shape(xtest), np.shape(ytest)
+        #print np.shape(xtr), np.shape(ytr), np.shape(xtest), np.shape(ytest)
         
         # build validation and testing data 
         tmp_idx = range(len(xtest))
@@ -208,23 +217,20 @@ elif train_mode == 'roll' or 'incre':
         xts = xtest[tmp_ts_idx]
         yts = np.asarray(ytest)[tmp_ts_idx]
         
-        auto_val = auto_test[tmp_val_idx] 
-        auto_ts  = auto_test[tmp_ts_idx]
+        auto_val = np.asarray(auto_test)[tmp_val_idx] 
+        auto_ts  = np.asarray(auto_test)[tmp_ts_idx]
         
+        print 'shape of training, validation and testing data: \n',
         print np.shape(xtr),  np.shape(auto_tr), np.shape(ytr)
         print np.shape(xval), np.shape(auto_val), np.shape(yval)
         print np.shape(xts),  np.shape(auto_ts), np.shape(yts)
         
-        
-        # train and evaluate models
-        # arguments: numpy array 
+        # train, validate and test models
         tmp_errors = train_eval_models( np.asarray(xtr), np.asarray(ytr), np.asarray(xval), np.asarray(yval),
                                         np.asarray(xts), np.asarray(yts), np.asarray(auto_tr), np.asarray(auto_val),\
                                         np.asarray(auto_ts) )
         
         print list(zip(model_list, tmp_errors))
     
-    
 else:
     print '[ERROR] training mode'
-

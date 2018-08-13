@@ -45,6 +45,7 @@ import xgboost as xgb
 #----Order of tuning: max_depth and num_samples_split, min_samples_leaf, max_features
 
 def utils_result_comparison(res1, res2, bool_clf):
+    
     # clf: accuracy, regression: error
     if bool_clf:
         return True if res1>res2 else False
@@ -52,21 +53,27 @@ def utils_result_comparison(res1, res2, bool_clf):
         return True if res1<res2 else False
     
 def utils_evaluation_score(x, y, bool_clf, model):
-    # clf: accuracy, regression: rmse
+    
+    # clf: accuracy
     if bool_clf:
         return model.score(x,y) 
+    
+    # regression: rmse
     else:
         y_hat  = model.predict(x)
         return sqrt(sum((y_hat-y)*(y_hat-y))/len(y))
     
 def utils_evaluation_full_score(x, y, bool_clf, model):
-    # clf: accuracy, regression: rmse, mae, mape 
+    
+    # clf: accuracy 
     if bool_clf:
         return model.score(x,y) 
+    
+    # regression: rmse, mae, mape
     else:
         y_hat = model.predict(x)
+        # [rmse, mae, mape]
         return [ sqrt(mean((y_hat-y)**2)), mean(abs(y_hat-y)), mean(abs(y_hat-y)/(y+1e-10)) ]      
-    
     
             
 def gbt_n_estimatior(maxnum, X, Y, xtest, ytest, fix_lr, bool_clf ):
@@ -96,6 +103,7 @@ def gbt_n_estimatior(maxnum, X, Y, xtest, ytest, fix_lr, bool_clf ):
                 
                 tmp_err = tmp_ts
         else:
+            
             tmp_ts = clf.score(xtest, ytest)
             score.append( (i, tmp_ts) )
             
@@ -105,7 +113,7 @@ def gbt_n_estimatior(maxnum, X, Y, xtest, ytest, fix_lr, bool_clf ):
                 
                 tmp_err = tmp_ts
     
-    return min(score, key = lambda x: x[1]) if bool_clf == False else max(score, key = lambda x: x[1]) ,\ 
+    return min(score, key = lambda x: x[1]) if bool_clf == False else max(score, key = lambda x: x[1]) ,\
            best_model, utils_evaluation_score(X, Y, bool_clf, best_model) 
 
 def gbt_tree_para( X, Y, xtest, ytest, depth_range, fix_lr, fix_n_est, bool_clf ):
@@ -118,9 +126,11 @@ def gbt_tree_para( X, Y, xtest, ytest, depth_range, fix_lr, fix_n_est, bool_clf 
     for i in depth_range:
         
         if bool_clf == False:
-            clf=GradientBoostingRegressor(n_estimators = fix_n_est, learning_rate = fix_lr,max_depth = i, max_features ='sqrt')
+            clf=GradientBoostingRegressor(n_estimators = fix_n_est, learning_rate = fix_lr,max_depth = i, \
+                                          max_features ='sqrt')
         else:
-            clf=GradientBoostingClassifier(n_estimators = fix_n_est,learning_rate = fix_lr,max_depth = i, max_features ='sqrt')
+            clf=GradientBoostingClassifier(n_estimators = fix_n_est,learning_rate = fix_lr,max_depth = i, \
+                                           max_features ='sqrt')
             
         clf.fit( X, tmpy )
         pytest = clf.predict(xtest)
@@ -139,6 +149,7 @@ def gbt_tree_para( X, Y, xtest, ytest, depth_range, fix_lr, fix_n_est, bool_clf 
                 
         # classification
         else:
+            
             tmp_ts = clf.score(xtest, ytest)
             score.append( (i, tmp_ts) )
             
@@ -179,7 +190,6 @@ def gbt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, fix_lr, bool_cl
         # hyper-parameters: depth = 3 has the best validation error
         result_tuple = [ n_err[0], 3, best_train, best_vali ]
         
-        
     else:
         
         joblib.dump(model1, model_file)
@@ -190,7 +200,6 @@ def gbt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, fix_lr, bool_cl
         # hyper-parameters with the best validation error 
         result_tuple = [ n_err[0], depth_err[0], best_train, best_vali ]
         
-        
     # save training prediction under the best model
     py = best_model.predict( xtrain )
     np.savetxt(pred_file + "pytrain_gbt.txt", zip(ytrain, py), delimiter=',')
@@ -200,7 +209,7 @@ def gbt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, fix_lr, bool_cl
         py = best_model.predict( xtest )
         np.savetxt(pred_file + "pytest_gbt.txt", zip(ytest, py), delimiter=',')
             
-        result_tuple.append( utils_evaluation_score(xtest, ytest, bool_clf, best_model) )
+        result_tuple.append( utils_evaluation_full_score(xtest, ytest, bool_clf, best_model) )
     
     # save validation prediction under the best model
     else:
@@ -214,12 +223,6 @@ def gbt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, fix_lr, bool_cl
         text_file.write( "GBT: %s \n" %(str(result_tuple)) )
     
     return result_tuple
-    
-    # load the model from disk
-    #loaded_model = joblib.load(filename)
-    #result = loaded_model.score(X_test, Y_test)
-    #print(result)
-    
     
     
 # ++++ XGBoosted ++++
@@ -249,20 +252,32 @@ def gbt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, fix_lr, bool_cl
 #   scale_pos_weight: >>1, for high class imbalance
 
 # Learning Task Parameters
-def xgt_evaluation_score(xg_tuple, y, bool_clf, model):
-    # clf: accuracy, regression: error
-    pred = model.predict( xg_tuple )
+def xgt_evaluation_score(xg_tuple, y, bool_clf, model, bool_full_score):
+    
+    # clf: accuracy
+    py = model.predict( xg_tuple )
     
     if bool_clf == True:
+        
         tmplen = len(y)
         tmpcnt = 0.0
+        
         for i in range(tmplen):
-            if y[i] == pred[i]:
+            if y[i] == py[i]:
                 tmpcnt += 1.0
+        
+        # accuracy
         return tmpcnt*1.0/tmplen
-                
+    
+    # regression: rmse, mae, mape
     else:
-        return sqrt(mean( [(pred[i] - y[i])**2 for i in range(len(y))] )) 
+        
+        y = np.asarray(y)
+        
+        if bool_full_score == True:
+            return [ sqrt(mean((py-y)**2)), mean(abs(py-y)), mean(abs(py-y)/(y+1e-10)) ]  
+        else:
+            return sqrt(mean((py-y)**2))
     
 
 def xgt_n_depth( lr, max_depth, max_round, xtrain, ytrain, xtest, ytest, bool_clf, num_class ):
@@ -271,19 +286,20 @@ def xgt_n_depth( lr, max_depth, max_round, xtrain, ytrain, xtest, ytest, bool_cl
     xg_train = xgb.DMatrix(xtrain, label = ytrain)
     xg_test  = xgb.DMatrix(xtest,  label = ytest)
 
-# setup parameters for xgboost
+    # setup parameters for xgboost
     param = {}
-# use softmax multi-class classification
+    
+    # use softmax multi-class classification
 
     if bool_clf == True:
         param['objective'] = 'multi:softmax'
         param['num_class'] = num_class
     else:
         param['objective'] = "reg:linear" 
-#   'multi:softmax'
+    # 'multi:softmax'
     
-# scale weight of positive examples
-    #   param['gamma']
+    # scale weight of positive examples
+    # param['gamma']
     param['eta'] = lr
     param['max_depth'] = 0
     param['silent'] = 1
@@ -324,7 +340,7 @@ def xgt_n_depth( lr, max_depth, max_round, xtrain, ytrain, xtest, ytest, bool_cl
             score.append( (depth_trial, num_round_trial, tmp_accur) )
             
     return min(score, key = lambda x: x[2]) if bool_clf == False else max(score, key = lambda x: x[2]),\
-           best_model, xgt_evaluation_score(xg_train, ytrain, bool_clf, best_model) 
+           best_model, xgt_evaluation_score(xg_train, ytrain, bool_clf, best_model, False) 
 
 
 def xgt_l2( fix_lr, fix_depth, fix_round, xtrain, ytrain, xtest, ytest, l2_range, bool_clf, num_class ):
@@ -333,23 +349,23 @@ def xgt_l2( fix_lr, fix_depth, fix_round, xtrain, ytrain, xtest, ytest, l2_range
     xg_train = xgb.DMatrix(xtrain, label = ytrain)
     xg_test  = xgb.DMatrix(xtest,  label = ytest)
 
-# setup parameters for xgboost
+    # setup parameters for xgboost
     param = {}
-# use softmax multi-class classification
+    # use softmax multi-class classification
     if bool_clf == True:
         param['objective'] = 'multi:softmax'
         param['num_class'] = num_class
     else:
         param['objective'] = "reg:linear" 
 
-# scale weight of positive examples
+    # scale weight of positive examples
     param['eta'] = fix_lr
     param['max_depth'] = fix_depth
     param['silent'] = 1
     param['nthread'] = 8
     
     param['lambda'] = 0.0
-#     param['alpha']
+    # param['alpha']
     
     tmp_err = 0.0 if bool_clf else np.inf 
     
@@ -385,7 +401,7 @@ def xgt_l2( fix_lr, fix_depth, fix_round, xtrain, ytrain, xtest, ytest, l2_range
         score.append( (l2_trial, tmp_accur) )
             
     return min(score, key = lambda x: x[1]) if bool_clf == False else max(score, key = lambda x: x[1]),\
-           best_model, xgt_evaluation_score(xg_train, ytrain, bool_clf, best_model)
+           best_model, xgt_evaluation_score(xg_train, ytrain, bool_clf, best_model, False)
     
     
 def xgt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, num_class, result_file, model_file, pred_file):
@@ -401,10 +417,6 @@ def xgt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, num_c
                     [0.0001, 0.001, 0.01, 0.1, 1, 10, 100], bool_clf, num_class)
     print " l2, RMSE:", train_err1, l2_err
 
-
-    # specific for XGBoosted
-    xg_train = xgb.DMatrix(xtrain, label = ytrain)
-    
     
     # training performance
     best_train = min(train_err0, train_err1) if bool_clf == False else max(train_err0, train_err1)  
@@ -414,37 +426,42 @@ def xgt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, num_c
         
         joblib.dump(model0, model_file)
         
-        # result_tuple [ # iteration, depth, l2, train error, validation error, test error ]
-        result_tuple = [ n_depth_err[0], n_depth_err[1], 0, best_train, best_vali ]
         best_model = model0
         best_vali = n_depth_err[2]
+        
+        # result_tuple [ # iteration, depth, l2, train error, validation error, test error ]
+        result_tuple = [ n_depth_err[0], n_depth_err[1], 0, best_train, best_vali ]
         
     else:
         joblib.dump(model1, model_file)
         
-        result_tuple = [ n_depth_err[0], n_depth_err[1], l2_err[0], best_train, best_vali ]
-        best_model = model1
         best_vali = l2_err[1]
         
+        result_tuple = [ n_depth_err[0], n_depth_err[1], l2_err[0], best_train, best_vali ]
+        best_model = model1
+        
     # save training prediction under the best model
+    
+    # specific to XGBoosted
+    xg_train = xgb.DMatrix(xtrain, label = ytrain)
+    
     py = best_model.predict( xg_train )
     np.savetxt(pred_file + "pytrain_xgt.txt", zip(ytrain, py), delimiter=',')
     
-    
     # save testing prediction under the best model
     if len(xtest)!=0:
-        xg_test  = xgb.DMatrix(xtest, label = ytest)
+        xg_tuple  = xgb.DMatrix(xtest, label = ytest)
         
-        py = best_model.predict( xg_test )
+        py = best_model.predict( xg_tuple )
         np.savetxt(pred_file + "pytest_xgt.txt", zip(ytest, py), delimiter=',')
             
-        result_tuple.append( xgt_evaluation_score(xg_test, ytest, bool_clf, best_model) )
+        result_tuple.append( xgt_evaluation_score(xg_tuple, ytest, bool_clf, best_model, True) )
     
     # save validation prediction under the best model
     else:
-        xg_val = xgb.DMatrix(xval, label = yval)
+        xg_tuple = xgb.DMatrix(xval, label = yval)
         
-        py = best_model.predict( xg_val )
+        py = best_model.predict( xg_tuple )
         np.savetxt(pred_file + "pytest_xgt.txt", zip(yval, py), delimiter=',')
             
         result_tuple.append( None )
@@ -514,7 +531,6 @@ def rf_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, result
 
     n_err, y_hat, best_model, train_err = rf_n_depth_estimatior( 100, 20, xtrain, ytrain, xval, yval, bool_clf )
     
-    
     # save the best model
     joblib.dump(best_model, model_file)
     
@@ -527,18 +543,18 @@ def rf_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, result
     
     # save testing or validation prediction under the best model
     if len(xtest)!=0:
-        py = model.predict( xtest )
+        py = best_model.predict( xtest )
         np.savetxt(pred_file + "pytest_rf.txt", zip(ytest, py), delimiter=',')
         
-        result_tuple.append( utils_evaluation_score(xtest, ytest, bool_clf, best_model) )
+        result_tuple.append( utils_evaluation_full_score(xtest, ytest, bool_clf, best_model) )
     
     else:
-        py = model.predict( xval )
+        py = best_model.predict( xval )
         np.savetxt(pred_file + "pytest_rf.txt", zip(yval, py), delimiter=',')
         
         result_tuple.append( None )
     
-    
+    # -- output
     print "number trees, depth, RMSE:", result_tuple
     
     # log overall errors
@@ -547,6 +563,10 @@ def rf_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, result
     
     # return the result tuple 
     return result_tuple
+
+
+# ------------- the following only for regression -------------
+
 
 # ++++ ElasticNet ++++
 
@@ -581,10 +601,10 @@ def enet_alpha_l1(alpha_range, l1_range, xtrain, ytrain, xtest, ytest, orig_ytra
                 tmp_err = tmp_ts
             
     
-    py_train = best_model..predict( xtrain ) 
+    py_train = best_model.predict( xtrain ) 
     train_err = sqrt(mean((pytrain-ytrain)*(pytrain-ytrain)))
     
-    return min(res, key = lambda x:x[3]), train_err, best_model
+    return min(res, key = lambda x:x[2]), train_err, best_model
 
 
 def elastic_net_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result_file, model_file, trans_ytrain, pred_file):
@@ -596,42 +616,44 @@ def elastic_net_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result_
     
     # train_err is derived with the model under the best validation performance
     if len(trans_ytrain) != 0:
-        err_min, err_list, train_err, best_model = enet_alpha_l1( alpha_range, l1_range, xtrain, trans_ytrain, xval, yval,\
+        err_min, train_err, best_model = enet_alpha_l1( alpha_range, l1_range, xtrain, trans_ytrain, xval, yval,\
                                                                  ytrain)
     else:
-        err_min, err_list, train_err, best_model = enet_alpha_l1( alpha_range, l1_range, xtrain, ytrain, xval, yval, [])
+        err_min, train_err, best_model = enet_alpha_l1( alpha_range, l1_range, xtrain, ytrain, xval, yval, [])
     
     # save the best model
     joblib.dump(best_model, model_file)
     
     # [l2, l1, train error, validation error, test error]
-    result_tuple = [ err_min[0], err_min[1], train_err, n_err[-1] ]
+    result_tuple = [ err_min[0], err_min[1], train_err, err_min[-1] ]
     
     # save training resutls under the best model
-    py = model.predict( xtrain )
+    py = best_model.predict( xtrain )
     np.savetxt(pred_file + "pytrain_enet.txt", zip(ytrain, py), delimiter=',')
     
     
     # save testing prediction under the best model  
     if len(xtest)!=0:
-        pytest  = model.predict( xtest )
+        py = best_model.predict( xtest )
         np.savetxt(pred_file + "pytest_enet.txt", zip(ytest, py), delimiter=',')
         
-        result_tuple.append( sqrt( mean((pytest - ytest)*(pytest - ytest)) ) )
+        # test error: rmse, mae, mape
+        result_tuple.append( [sqrt(mean((py - ytest)**2)), mean(abs(py - ytest)),\
+                              mean(abs(py - ytest)/(ytest+1e-10))] )
     
     # save validation prediction under the best model     
     else:
-        pytest  = model.predict( xval )
+        py = best_model.predict( xval )
         np.savetxt(pred_file + "pytest_enet.txt", zip(yval, py), delimiter=',')
         
         result_tuple.append( None )
     
-    # output
+    # -- output
     print "ENET RMSE:", result_tuple
     
     # save overall errors
     with open(result_file, "a") as text_file:
-        text_file.write( "Elastic Net %s \n"%( str(err_min)) )
+        text_file.write( "Elastic Net %s \n"%( str(result_tuple)) )
     
     # return the least validation error 
     return result_tuple
@@ -666,17 +688,24 @@ def bayesian_reg_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result
         tmp_tr = sqrt(mean((exp(pytrain)-ytrain)*(exp(pytrain)-ytrain)))
         tmp_val = sqrt(mean((exp(pyval)-yval)**2))
     
-    print "Bayes RMSE: ", tmp_tr, tmp_val 
-    
     # [train error, validation error, test error]
     result_tuple = [ tmp_tr, tmp_val ]
     
+    # save training prediction under the best model
+    if len(trans_ytrain) ==0:
+        np.savetxt(pred_file + "pytrain_bayes.txt", zip(ytrain, pytrain), delimiter=',')
+    else:
+        np.savetxt(pred_file + "pytrain_bayes.txt", zip(ytrain, exp(pytrain)), delimiter=',')
+        
+    # save testing prediction under the best model
     if len(xtest) != 0:
+        
         py = bayesian_reg.predict( xtest )
         
         # save testing prediction under the best model
         if len(trans_ytrain) ==0:
-            result_tuple.append( sqrt(mean((py-ytest)**2)) )
+            result_tuple.append( [sqrt(mean((py - ytest)**2)), mean(abs(py - ytest)),\
+                                 mean(abs(py - ytest)/(ytest+1e-10))] )
             np.savetxt(pred_file + "pytest_bayes.txt", zip(ytest, py), delimiter=',')
             
         else:
@@ -690,15 +719,6 @@ def bayesian_reg_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result
             np.savetxt(pred_file + "pytest_bayes.txt", zip(yval, py), delimiter=',')
         else:
             np.savetxt(pred_file + "pytest_bayes.txt", zip(yval, exp(py)), delimiter=',')
-        
-    
-    # save training prediction under the best model
-    py = bayesian_reg.predict( xtrain )
-    if len(trans_ytrain) ==0:
-        np.savetxt(pred_file + "pytrain_bayes.txt", zip(ytrain, py), delimiter=',')
-    else:
-        np.savetxt(pred_file + "pytrain_bayes.txt", zip(ytrain, exp(py)), delimiter=',')
-    
     
     # save the best model
     joblib.dump(bayesian_reg, model_file)
@@ -767,8 +787,10 @@ def ridge_reg_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result_fi
     if len(xtest) != 0:
         
         py = best_model.predict( xtest )
-        if len(trans_ytrain) ==0:
-            result_tuple.append( sqrt(mean((py-ytest)*(py-ytest))) )
+        
+        if len(trans_ytrain) == 0:
+            result_tuple.append( [sqrt(mean((py - ytest)**2)), mean(abs(py - ytest)),\
+                                  mean(abs(py - ytest)/(ytest+1e-10))] )
             np.savetxt(pred_file + "pytest_ridge.txt", zip(ytest, py), delimiter=',')
         
         else:
@@ -776,9 +798,10 @@ def ridge_reg_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result_fi
             np.savetxt(pred_file + "pytest_ridge.txt", zip(ytest, exp(py)), delimiter=',')
         
     else:
+        
         py = best_model.predict( xval )
         
-        if len(trans_ytrain) ==0: 
+        if len(trans_ytrain) == 0: 
             np.savetxt(pred_file + "pytest_ridge.txt", zip(yval, py), delimiter=',')
         else:
             np.savetxt(pred_file + "pytest_ridge.txt", zip(yval, exp(py)), delimiter=',')
@@ -825,26 +848,30 @@ def gp_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result_file, mod
     pytrain = -1
     tmp_tr = -1
     
-    py, sigma_test = gp.predict(xtrain, return_std=True)
-    tmp_tr = sqrt(mean((py-ytrain)**2))
+    py_train, sigma_test = gp.predict(xtrain, return_std=True)
+    tmp_tr = sqrt(mean((py_train - ytrain)**2))
     
     # save training prediction under the best model
-    np.savetxt(pred_file + "pytrain_gp.txt", zip(ytrain, py), delimiter=',')
+    np.savetxt(pred_file + "pytrain_gp.txt", zip(ytrain, py_train), delimiter=',')
     
     py_val, sigma_test = gp.predict(xval, return_std=True)
-    tmp_val = sqrt(mean((py-yval)**2))
+    tmp_val = sqrt(mean((py_val - yval)**2))
     
     # [ train error, validation error, test error ]
     result_tuple = [ tmp_tr, tmp_val ]
     
     # save testing prediction under the best model
     if len(xtest)!=0:
+        
         py, sigma_test = gp.predict(xtest, return_std=True)
+        
         np.savetxt(pred_file + "pytest_gp.txt", zip(ytest, py), delimiter=',')
         
-        result_tuple.append( sqrt(mean((py-ytest)**2)) )
+        result_tuple.append( [sqrt(mean((py - ytest)**2)), mean(abs(py - ytest)),\
+                              mean(abs(py - ytest)/(ytest+1e-10))] )
         
     else:
+        
         np.savetxt(pred_file + "pytest_gp.txt", zip(yval, py_val), delimiter=',')
         result_tuple.append( None )
     
@@ -904,7 +931,8 @@ def lasso_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result_file, 
         py = reg.predict( xtest )
         np.savetxt(pred_file + "pytest_lasso.txt", zip(ytest, py), delimiter=',')
         
-        result_tuple.append(sqrt(mean((py-ytest)**2)))
+        result_tuple.append( [sqrt(mean((py - ytest)**2)), mean(abs(py - ytest)),\
+                              mean(abs(py - ytest)/(ytest+1e-10))] )
         
     else:
         py = reg.predict( xval )
@@ -924,6 +952,7 @@ def lasso_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, result_file, 
 
 # ++++ exponential weighted moving average ++++
 
+# only used for the case having only validation data
 def ewma_validate(ytrain, yval, ytest, result_file, pred_file):
     
     rmse = []
@@ -994,7 +1023,7 @@ def ewma_validate(ytrain, yval, ytest, result_file, pred_file):
 def ewma_instance_validate(auto_train, ytrain, auto_val, yval, auto_test, ytest, result_file, pred_file):
     
     tmp_val_err = []
-    for alpha in [0.005, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+    for alpha in [0.001, 0.005, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
         
         # validation phase
         py = []
@@ -1009,7 +1038,7 @@ def ewma_instance_validate(auto_train, ytrain, auto_val, yval, auto_test, ytest,
             py.append(tmp_py)
             
         py = np.asarray(py)
-        tmp_val_err.append( [ alpha, sqrt(mean(py-yval)**2) ] )
+        tmp_val_err.append( [alpha, sqrt(mean(py-yval)**2)] )
     
     val_err = min(tmp_val_err, key = lambda x:x[1])[1] 
     best_alpha = min(tmp_val_err, key = lambda x:x[1])[0]
@@ -1028,7 +1057,7 @@ def ewma_instance_validate(auto_train, ytrain, auto_val, yval, auto_test, ytest,
         py.append(tmp_py)
             
     py = np.asarray(py)
-    train_err = sqrt(mean(py-yval)**2)
+    training_err = sqrt(mean(py - ytrain)**2)
     np.savetxt(pred_file + "pytrain_ewma.txt", zip(ytrain, py), delimiter=',')
     
     
@@ -1050,7 +1079,9 @@ def ewma_instance_validate(auto_train, ytrain, auto_val, yval, auto_test, ytest,
             py.append(tmp_py)
             
         py = np.asarray(py)
-        result_tuple.append( sqrt(mean(py-ytest)**2) )
+        result_tuple.append( [sqrt(mean((py - ytest)**2)), mean(abs(py - ytest)),\
+                              mean(abs(py - ytest)/(ytest+1e-10))] )
+        
         np.savetxt(pred_file + "pytest_ewma.txt", zip(ytest, py), delimiter=',')
         
     else:
@@ -1065,7 +1096,7 @@ def ewma_instance_validate(auto_train, ytrain, auto_val, yval, auto_test, ytest,
                 tmp_py = (1.0-best_alpha)*auto_val[i][j] + best_alpha*tmp_py
         
             py.append(tmp_py)
-            
+        
         py = np.asarray(py)
         result_tuple.append( None )
         np.savetxt(pred_file + "pytest_ewma.txt", zip(yval, py), delimiter=',')

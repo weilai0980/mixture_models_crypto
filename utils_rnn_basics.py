@@ -172,6 +172,7 @@ def plain_lstm(x, dim_layers, scope, dropout_keep_prob):
         
         
     for i in range(1,len(dim_layers)):
+        
         with tf.variable_scope(scope+str(i)):
             tmp_cell = tf.nn.rnn_cell.LSTMCell(dim_layers[i], \
                                                     initializer= tf.contrib.keras.initializers.glorot_normal())
