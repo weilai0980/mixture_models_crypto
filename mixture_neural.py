@@ -20,8 +20,30 @@ import collections
 import hashlib
 import numbers
 
+# tensorflow
 from tensorflow.python.ops import rnn_cell_impl
 from tensorflow.python.ops.rnn_cell_impl import * 
+
+from tensorflow.python.ops import nn_ops
+
+from tensorflow.python.framework import constant_op
+from tensorflow.python.framework import dtypes
+from tensorflow.python.framework import ops
+from tensorflow.python.framework import tensor_shape
+from tensorflow.python.framework import tensor_util
+from tensorflow.python.layers import base as base_layer
+from tensorflow.python.ops import array_ops
+from tensorflow.python.ops import clip_ops
+from tensorflow.python.ops import init_ops
+from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import nn_ops
+from tensorflow.python.ops import partitioned_variables
+from tensorflow.python.ops import random_ops
+from tensorflow.python.ops import tensor_array_ops
+from tensorflow.python.ops import variable_scope as vs
+from tensorflow.python.ops import variables as tf_variables
+from tensorflow.python.platform import tf_logging as logging
+from tensorflow.python.util import nest
 
 # local packages
 from utils_libs import *
@@ -631,29 +653,113 @@ def context_from_hiddens_lstm(h, bool_attention):
 
 
 # used for outputing prediction or logits of classification
-def one_dense(x, x_dim, scope, out_dim, activation):
+# without max_norm regularization
+def one_dense(x, x_dim, scope, out_dim, activation, bool_scope_reuse, bool_bias):
     
-    with tf.variable_scope(scope):
+    with tf.variable_scope(scope, reuse = bool_scope_reuse):
         
-        w = tf.get_variable('w', shape=[x_dim, out_dim], initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.Variable(tf.zeros([1]))
+        w = tf.get_variable('w', shape=[x_dim, out_dim], initializer = tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable('b', initializer = tf.zeros([out_dim]))
+        
+        tmp = tf.matmul(x, w)
         
         if activation == 'relu':
             
-            return tf.squeeze(tf.nn.relu(tf.matmul(x, w) + b)), tf.nn.l2_loss(w)
+            return tf.squeeze(tf.nn.relu(tmp + b)) if bool_bias == True else tf.squeeze(tf.nn.relu(tmp)), tf.nn.l2_loss(w)
         
         elif activation == 'leaky_relu':
             
-            return tf.maximum( tf.matmul(x, w) + b, 0.2*(tf.matmul(x, w) + b) ), tf.nn.l2_loss(w)
+            return tf.squeeze(tf.maximum(tmp + b, 0.2*(tmp + b))) if bool_bias == True else tf.squeeze(tf.maximum(tmp, 0.2*tmp)), tf.nn.l2_loss(w)
+        
+        elif activation == 'tanh':
+            
+            return tf.squeeze(tf.tanh(tmp + b)) if bool_bias == True else tf.squeeze(tf.tanh(tmp)), tf.nn.l2_loss(w)
         
         elif activation == 'linear':
             
-            return tf.squeeze( tf.matmul(x, w) + b ), tf.nn.l2_loss(w)
+            return tf.squeeze(tmp + b) if bool_bias == True else tf.squeeze(tmp), tf.nn.l2_loss(w)
         
         else:
-            print ' ------------ [ERROR] activiation type'
-
+            print(' ------------ [ERROR] activiation type')
+            
+            
+def one_tensor_dot(x, x_last_dim, scope, out_dim, activation, bool_scope_reuse, bool_bias):
     
+    with tf.variable_scope(scope, reuse = bool_scope_reuse):
+        
+        w = tf.get_variable('w', shape = [x_last_dim, out_dim], initializer = tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable('b', initializer = tf.zeros([out_dim]))
+        
+        tmp = tf.tensordot(x, w, 1)
+        
+        if activation == 'relu':
+            
+            return tf.squeeze(tf.nn.relu(tmp + b)) if bool_bias == True else tf.squeeze(tf.nn.relu(tmp)), tf.nn.l2_loss(w)
+        
+        elif activation == 'leaky_relu':
+            
+            return tf.squeeze(tf.maximum(tmp + b, 0.2*(tmp + b))) if bool_bias == True else tf.squeeze(tf.maximum(tmp, 0.2*tmp)), tf.nn.l2_loss(w)
+        
+        elif activation == 'tanh':
+            
+            return tf.squeeze(tf.tanh(tmp + b)) if bool_bias == True else tf.squeeze(tf.tanh(tmp)), tf.nn.l2_loss(w)
+        
+        elif activation == 'linear':
+            
+            return tf.squeeze(tmp + b)  if bool_bias == True else tf.squeeze(tmp), tf.nn.l2_loss(w)
+        
+        else:
+            print(' ------------ [ERROR] activiation type')
+    
+    
+class ada_ma_cell(RNNCell):
+    
+    def __init__(self, n_dim, logit_dim):
+        """
+        Args:
+        """
+        self.n_dim = n_dim
+        self.logit_dim = logit_dim
+
+    @property
+    def state_size(self):
+        return self.logit_dim
+
+    @property
+    def output_size(self):
+        return self.logit_dim
+    
+    def __call__(self, inputs, state, scope=None):
+        """
+        Args:
+      
+          inputs: [batch_size, new logits + hidden difference]
+          state:  [batch_size, moving-average weighted logits]
+          scope: Unused variable scope of this cell.
+    
+        Returns:
+          new_state, new_state
+        """
+        
+        scope = vs.get_variable_scope()
+        
+        with vs.variable_scope(scope) as outer_scope:
+            # [dim 2]
+            weights = vs.get_variable('weight', [self.n_dim - self.logit_dim, self.logit_dim])
+            bias = vs.get_variable('bias', [self.logit_dim, ])
+        
+            # [B 2] [B dim]
+            new_logits, h_diff = array_ops.split(inputs, \
+                                                 num_or_size_splits = [self.logit_dim, self.n_dim - self.logit_dim], \
+                                                 axis = 1)
+            # [B 2]
+            ma_gate = tf.sigmoid( tf.matmul(h_diff, weights) + bias ) 
+            
+            # [B 2], moving-averaged logits
+            new_state = ma_gate*new_logits + (1.0 - ma_gate)*state
+        
+        return new_state, new_state
+
     
 # ---- LSTM mixture ----
 
@@ -672,82 +778,213 @@ class lstm_mixture():
             return h
     
     def __init__(self, session, lr, l2, steps_auto, dim_x, steps_x, num_dense, max_norm, lstm_size_layers,\
-                 loss_type, activation_type, pos_regu, gate_type):
+                 loss_type, activation_type, bool_pos_regu, gate_type, bool_gate_logit_shared, bool_point_wise):
+        
+        # --- hyper-parameters 
         
         # build the network graph 
         self.LEARNING_RATE = lr
         
-        # [ l2_mean, l2_var, l2_gate, l2_pos ]
-        # TO DO 
-        
         self.sess = session
-        
         self.loss_type = loss_type
         
         # initialize placeholders
-        self.auto = tf.placeholder(tf.float32, [None, steps_auto, 1])
-        self.x = tf.placeholder(tf.float32, [None, steps_x, dim_x])
         self.y = tf.placeholder(tf.float32, [None, ])
         self.keep_prob = tf.placeholder(tf.float32, [None, ])
         
-        # --- individual LSTM ---
-
-        h_auto, _ = plain_lstm( self.auto, lstm_size_layers, 'lstm_auto', self.keep_prob )
+        self.lr = tf.Variable(lr, trainable=False)
+        self.new_lr = tf.placeholder(tf.float32, shape = (), name = 'new_lr')
         
-        h_x, _ = plain_lstm( self.x, lstm_size_layers, 'lstm_x', self.keep_prob )
+        # --- autoregressive component ---
+        
+        # initialize placeholders
+        self.auto = tf.placeholder(tf.float32, [None, steps_auto, 1])
+        
+        # [B T D]
+        # B: batch
+        # T: step of Y
+        # D: dimension of hidden states
+        h_auto_seq, _ = plain_rnn( self.auto, lstm_size_layers[0], 'rnn_auto', self.keep_prob, 'gru' )
         
         # obtain the last hidden state
-        tmp_h_auto  = tf.transpose( h_auto, [1,0,2] )[-1]
-        tmp_h_x = tf.transpose( h_x, [1,0,2] )[-1]
-
-        # component
-        h_auto, regu_dense_auto, out_dim = multi_dense(tmp_h_auto, lstm_size_layers[-1], num_dense, 'dense_auto',\
+        tmp_h_auto = tf.transpose( h_auto_seq, [1,0,2] )[-1]
+        
+        h_auto, regu_dense_auto, out_dim = multi_dense(tmp_h_auto, lstm_size_layers[0][-1], num_dense, 'dense_auto',\
                                                        tf.gather(self.keep_prob, 0), max_norm)
         
-        mean_auto, regu_mean_auto = one_dense(h_auto, out_dim, 'mean_auto', 1, activation_type)
-        var_auto, regu_var_auto = one_dense(h_auto, out_dim, 'var_auto', 1, 'relu')
+        # without max_norm regularization
+        mean_auto, regu_mean_auto = one_dense(h_auto, out_dim, 'mean_auto', 1, activation_type, False, True)
+        var_auto, regu_var_auto = one_dense(h_auto, out_dim, 'var_auto', 1, 'relu', False, True)
         sd_auto = var_auto
         
         regu_mean_auto = regu_dense_auto + regu_mean_auto
         
-        # component
-        h_x, regu_dense_x, out_dim = multi_dense(tmp_h_x, lstm_size_layers[-1], num_dense, 'dense_x', \
-                                                 tf.gather(self.keep_prob, 0), max_norm)
         
-        mean_x, regu_mean_x = one_dense(h_x, out_dim, 'mean_x', 1, activation_type)
-        var_x, regu_var_x = one_dense(h_x, out_dim, 'var_x', 1, 'relu')
+        # --- external dependency component ---
+        
+        if bool_point_wise == False:
+            
+            # initialize placeholders
+            self.x = tf.placeholder(tf.float32, [None, steps_x, dim_x])
+            
+            h_x_seq, _ = plain_rnn(self.x, lstm_size_layers[1], 'rnn_x', self.keep_prob, 'gru')
+            tmp_h_x = tf.transpose( h_x_seq, [1,0,2] )[-1]
+            
+            
+        else:
+            
+            # initialize placeholders
+            # [B T S d]
+            # T: steps of autoregressive Y
+            # S: steps of external features X
+            # d: dimension of X at each step
+            self.x = tf.placeholder(tf.float32, [None, steps_auto, steps_x, dim_x])
+            # [B*T S d]
+            flatten_x = tf.reshape(self.x, [-1, steps_x, dim_x])
+            
+            # [B*T S D]
+            h_x, _ = plain_rnn(flatten_x, lstm_size_layers[1], 'rnn_x', self.keep_prob, 'gru')
+            
+            # [B T S D]
+            h_x_point_wise = tf.reshape(h_x, [-1, steps_auto, steps_x, lstm_size_layers[1][-1]])
+            
+            # [B T D]
+            h_x_seq = tf.transpose(h_x_point_wise, [2, 0, 1, 3])[-1] 
+            
+            # last step
+            # [B D]
+            tmp_h_x = tf.transpose(h_x_point_wise, [1, 2, 0, 3])[-1][-1]
+        
+        
+        # WITH max_norm regularization     
+        h_x, regu_dense_x, out_dim = multi_dense(tmp_h_x, 
+                                                 lstm_size_layers[1][-1], 
+                                                 num_dense, 
+                                                 'dense_x', \
+                                                 tf.gather(self.keep_prob, 0), 
+                                                 max_norm)
+        
+        # W/O max_norm regularization
+        mean_x, regu_mean_x = one_dense(h_x, out_dim, 'mean_x', 1, activation_type, False, True)
+        var_x, regu_var_x = one_dense(h_x, out_dim, 'var_x', 1, 'relu', False, True)
         sd_x = var_x
         
         regu_mean_x = regu_dense_x + regu_mean_x
-            
+        
         # mean concatenate of each expert
         mean_concat = tf.squeeze( tf.stack( [mean_auto, mean_x], 1 ) )          
         
+        
         # --- gate ---
         
-        # TO DO 
-        # adaptive moving average logit 
-        
-        
-        
-        
-        if gate_type == 'softmax':
-            # softmax
-            # [N 2D]
-            h_concat = tf.concat( [tmp_h_auto, tmp_h_x], 1 )
-            self.logit, regu_gate = one_dense(h_concat, lstm_size_layers[-1]+lstm_size_layers[-1], 'gate', 2, 'relu')
-            self.gates = tf.nn.softmax(self.logit)
-        
-        elif gate_type == 'logistic':
-            # logistic
-            tmp_logit, regu_gate = one_dense(tmp_h_x, lstm_size_layers[-1], 'logit_x', 1, 'relu')
-            self.logit = tf.stack( [tf.ones(tf.shape(tmp_logit)[0]), tmp_logit], 1 ) 
-            self.gates = tf.stack( [1.0 - tf.sigmoid(tmp_logit), tf.sigmoid(tmp_logit)] ,1 )
-        
-        
-        else:
-            print ' ----- [ERROR] gate type'
+        if gate_type == 'softmax-mlp':
             
+            # [B 2D]
+            # h_concat = tf.concat( [tmp_h_auto, tmp_h_x], 1 )
+            # self.logit, regu_gate = one_dense(h_concat, lstm_size_layers[-1]+lstm_size_layers[-1], 'gate', 2, 'relu')
+            
+            pre_logit_a, regu_gate_a = one_dense(tmp_h_auto, lstm_size_layers[0][-1], 'pre_logit_a', 5, 'tanh', False, True)
+            pre_logit_x, regu_gate_x = one_dense(tmp_h_x, lstm_size_layers[1][-1], 'pre_logit_x', 5, 'tanh', False, True)
+            
+            regu_gate = regu_gate_a + regu_gate_x
+            
+            if bool_gate_logit_shared == True:
+                
+                logit_a, tmp_regu = one_dense(pre_logit_a, 5, 'logit', 1, 'linear', False, False)
+                logit_x, _ = one_dense(pre_logit_x, 5, 'logit', 1, 'linear', True, False)
+                
+                self.logit = tf.stack([logit_a, logit_x], 1)
+                
+                regu_gate += tmp_regu
+                
+            else:
+                
+                logit_a, tmp_regu_a = one_dense(pre_logit_a, 5, 'logit_a', 1, 'linear', False, False)
+                logit_x, tmp_regu_b = one_dense(pre_logit_x, 5, 'logit_x', 1, 'linear', False, False)
+                
+                self.logit = tf.stack([logit_a, logit_x], 1)
+                
+                regu_gate += (tmp_regu_a + tmp_regu_b)
+                
+            self.gates = tf.nn.softmax(self.logit)
+            
+        elif gate_type == 'softmax-linear':
+            
+            logit_a, regu_gate_a = one_dense(tmp_h_auto, lstm_size_layers[0][-1], 'logit_a', 1, 'linear', False, True)
+            logit_x, regu_gate_x = one_dense(tmp_h_x, lstm_size_layers[1][-1], 'logit_x', 1, 'linear', False, True)
+            
+            regu_gate = regu_gate_a + regu_gate_x
+            
+            self.gates = tf.nn.softmax( tf.stack([logit_a, logit_x], 1) )
+        
+        
+        elif gate_type == 'logistic-partial':
+            
+            tmp_logit, regu_gate = one_dense(tmp_h_x, lstm_size_layers[1][-1], 'logit', 1, 'linear', False, True)
+            
+            self.gates = tf.stack( [1.0 - tf.sigmoid(tmp_logit), tf.sigmoid(tmp_logit)] ,1 )
+            
+            
+        elif gate_type == 'logistic-concat':
+            
+            tmp_logit, regu_gate = one_dense(tf.concat( [tmp_h_x, tmp_h_a], 1), \
+                                             lstm_size_layers[0][-1] + lstm_size_layers[1][-1], \
+                                             'logit', 1, 'linear', False, True)
+            
+            self.gates = tf.stack( [1.0 - tf.sigmoid(tmp_logit), tf.sigmoid(tmp_logit)] ,1 )
+            
+        
+        elif gate_type == 'ada-ma':
+            
+            # -- hidden difference sequence
+            
+            # T-1 B D
+            h_x_trans = tf.transpose( h_x_seq, [1, 0, 2] )
+            h_x_diff = tf.square( h_x_trans[1:] - h_x_trans[:-1] )
+            
+            # T-1 B D
+            h_a_trans = tf.transpose( h_auto_seq, [1, 0, 2] )
+            h_a_diff = tf.square( h_a_trans[1:] - h_a_trans[:-1] )
+            
+            # T-1 B 2D
+            diff_seq = tf.concat( [h_x_diff, h_a_diff], 2 )
+            
+            
+            # -- logits sequence
+            
+            # B T
+            logit_a_seq, regu_logit_a = one_tensor_dot(h_auto_seq, lstm_size_layers[0][-1], \
+                                                       'logit_a_seq', 1, 'linear', False, True)
+            
+            logit_x_seq, regu_logit_x = one_tensor_dot(h_x_seq, lstm_size_layers[1][-1], \
+                                                       'logit_x_seq', 1, 'linear', False, True)
+            
+            regu_gate = regu_logit_a + regu_logit_x
+           
+            
+            # T-1 B 2   B T 2
+            logit_seq = tf.transpose(tf.stack([logit_a_seq, logit_x_seq], 2), [1, 0, 2])[1:]
+            
+            
+            # -- adaptive moving average
+            
+            # B T-1 2+2D
+            ada_ma_input = tf.transpose(tf.concat([logit_seq, diff_seq], 2), [1, 0, 2])
+            
+            ada_ma_input.set_shape([None, steps_auto-1, lstm_size_layers[0][-1] + lstm_size_layers[1][-1] + 2])
+            
+            
+            ma_cell = ada_ma_cell(lstm_size_layers[0][-1] + lstm_size_layers[1][-1] + 2, 2)
+            # B T-1 2
+            ma_logit_seq, state = tf.nn.dynamic_rnn(cell = ma_cell, inputs = ada_ma_input, dtype = tf.float32)
+            
+            # B 2
+            self.gates = tf.nn.softmax( tf.transpose(ma_logit_seq, [1, 0, 2])[-1] )
+            
+        else:
+            print('\n ----- [ERROR] gate type \n')
+           
+        
         # --- regularization ---
         # ?
         
@@ -755,13 +992,12 @@ class lstm_mixture():
         regu_mean_pos = tf.reduce_sum( tf.maximum(0.0, -1.0*mean_auto) + tf.maximum(0.0, -1.0*mean_x) )
         
         self.regu = l2*(regu_mean_auto+regu_mean_x) + \
-                    l2*(regu_var_auto+regu_var_x) + \
-                    l2*(regu_gate)
+                    0.0001*(regu_var_auto+regu_var_x) + \
+                    0.0001*(regu_gate)
         
-        if pos_regu == True:
-            self.regu += l2*regu_mean_pos
-            
-        
+        if bool_pos_regu == True:
+            self.regu += 0.001*regu_mean_pos
+                    
         # --- loss ---
         
         # loss: negative log likelihood - normal 
@@ -788,26 +1024,49 @@ class lstm_mixture():
         
         # loss type
         if self.loss_type == 'gaussian':
+            
             self.y_hat = self.y_hat_norm
             self.loss = self.neg_logllk_norm + self.regu
         
         elif self.loss_type == 'lognorm':
+            
             self.y_hat = self.y_hat_log
             self.loss = self.neg_logllk_log + self.regu
         
         elif self.loss_type == 'sq':
+            # gaussian by default
+            
             self.y_hat = self.y_hat_sq
             self.loss = self.sq + self.regu
+            
+        elif self.loss_type == 'point_wise':
+            
+            if bool_point_wise == False:
+                print('---- [ERROR] point_wise in loss type')
+                return
+            
+            self.loss = self.y_hat_sq
+            
+        else:
+            print('---- [ERROR] loss type')
             
             
         # --- errors metric ---
         
         # RMSE
         self.rmse = tf.sqrt( tf.losses.mean_squared_error(self.y, self.y_hat) )
+        
         # MAPE
-        self.mape = tf.reduce_mean( tf.abs((self.y - self.y_hat)/(self.y+1e-10)) )
+        
+        # filtering before mape calculation
+        mask = tf.greater(self.y, 0.00001)
+        y_mask = tf.boolean_mask(self.y, mask)
+        y_hat_mask = tf.boolean_mask(self.y_hat, mask)
+        
+        self.mape = tf.reduce_mean( tf.abs((y_mask - y_hat_mask)/(y_mask+1e-10)) )
+        
         # MAE
-        self.mae = tf.reduce_mean( tf.abs(self.y - self.y_hat) )
+        self.mae = tf.reduce_mean(tf.abs(self.y - self.y_hat))
         
         
     def model_reset(self):
@@ -817,20 +1076,28 @@ class lstm_mixture():
 #   initialize loss and optimization operations for training
     def train_ini(self):
         
-        # !
-        self.optimizer = \
-        tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE).minimize(self.loss)
+        # ?
+        self.optimizer = tf.train.AdamOptimizer( learning_rate = self.lr ).minimize(self.loss)
         
         self.init = tf.global_variables_initializer()
         self.sess.run( self.init )
         
         
     #   training on batch of data
-    def train_batch(self, v_train, distr_train, y_train, keep_prob ):
+    def train_batch(self, v_train, distr_train, y_train, keep_prob, bool_set_lr, lr):
         
-        # !
-        _,c = self.sess.run([self.optimizer, self.loss],\
-                             feed_dict={self.auto:v_train, self.x:distr_train, self.y:y_train, self.keep_prob:keep_prob})
+        # learning rate decay update
+        if bool_set_lr == True:
+            
+            self.lr_update = tf.assign(self.lr, self.new_lr)
+
+            _ = self.sess.run([self.lr_update], feed_dict={self.new_lr:lr})
+        
+        
+        _,c = self.sess.run([self.optimizer, self.loss], feed_dict={self.auto:v_train,\
+                                                                    self.x:distr_train,\
+                                                                    self.y:y_train,\
+                                                                    self.keep_prob:keep_prob})
         return c
     
     
@@ -849,15 +1116,14 @@ class lstm_mixture():
         return self.sess.run( self.gates, feed_dict = {self.auto:auto_test,\
                                                         self.x:x_test, self.keep_prob:keep_prob })
     
-    #def predict_logit(self, auto_test, x_test, keep_prob):
-    #    return self.sess.run( self.logit, feed_dict = {self.auto:auto_test,\
-    #                                                   self.x:x_test, self.keep_prob:keep_prob })
+    def test(self, auto_test, x_test, keep_prob):
+        return self.sess.run( self.test1, feed_dict = {self.auto:auto_test,\
+                                                       self.x:x_test, self.keep_prob:keep_prob })
 
 
 # ---- LSTM feature concatenation ----
 
 class lstm_concat():
-    
 
     def __init__(self, session, lr, l2, steps_auto, dim_x, steps_x, num_dense, max_norm, size_layers_lstm):
         
@@ -878,23 +1144,23 @@ class lstm_concat():
         
         # --- individual LSTM ---
 
-        h_auto, _ = plain_lstm( self.auto, size_layers_lstm, 'lstm-v', self.keep_prob )
+        h_auto, _ = plain_rnn( self.auto, size_layers_lstm, 'rnn-v', self.keep_prob, 'lstm' )
         
-        h_x, _ = plain_lstm( self.x, size_layers_lstm, 'lstm-ob', self.keep_prob )
+        h_x, _ = plain_rnn( self.x, size_layers_lstm, 'rnn-ob', self.keep_prob, 'lstm' )
         
         # obtain the last hidden state
         tmp_h_auto  = tf.transpose( h_auto, [1,0,2] )
         tmp_h_x = tf.transpose( h_x, [1,0,2] )
         
         
-        # --- concatenation to output prediction ---
+        # --- feature concatenation for output prediction ---
         
         # [N 2D]
         h = tf.concat( [tmp_h_auto[-1], tmp_h_x[-1]], 1 )
             
         # dropout
-        h, regu_dense, out_dim = multi_dense( h, 2*size_layers_lstm[-1], num_dense, \
-                                              'dense', tf.gather(self.keep_prob, 0), max_norm)
+        h, regu_dense, out_dim = multi_dense(h, 2*size_layers_lstm[-1], num_dense,\
+                                             'dense', tf.gather(self.keep_prob, 0), max_norm)
         
         with tf.variable_scope("output"):
             
@@ -938,7 +1204,7 @@ class lstm_concat():
         self.init = tf.global_variables_initializer()
         self.sess.run(self.init)
         
-        
+    
     #   training on batch of data
     def train_batch(self, auto_train, x_train, y_train, keep_prob ):
         
@@ -959,4 +1225,122 @@ class lstm_concat():
         
         return self.sess.run( [self.y_hat], feed_dict = {self.auto:auto_test, \
                                                          self.x:x_test, self.keep_prob:keep_prob })
+    
+    
+# ---- LSTM joint feature ----
+
+class lstm_joint():
+    
+
+    def __init__(self, session, lr, l2, steps_auto, dim_x, steps_x, num_dense, max_norm, size_layers_lstm):
+        
+        # build the network graph 
+        self.LEARNING_RATE = lr
+                
+        self.epsilon = 1e-3
+        
+        self.sess = session
+        
+        # initialize placeholders
+        self.auto = tf.placeholder(tf.float32, [None, steps_auto, 1])
+        self.y = tf.placeholder(tf.float32, [None, ])
+        self.keep_prob = tf.placeholder(tf.float32, [None])
+        
+        self.x = tf.placeholder(tf.float32, [None, steps_x, dim_x])
+        
+        
+        # --- individual LSTM ---
+
+        h_auto, _ = plain_rnn( self.auto, size_layers_lstm, 'rnn-v', self.keep_prob, 'lstm' )
+        
+        h_x, _ = plain_rnn( self.x, size_layers_lstm, 'rnn-ob', self.keep_prob, 'lstm' )
+        
+        # obtain the last hidden state
+        tmp_h_auto  = tf.transpose( h_auto, [1,0,2] )
+        tmp_h_x = tf.transpose( h_x, [1,0,2] )
+        
+        
+        # --- feature concatenation for output prediction ---
+        
+        # [N 2D]
+        h = tf.concat( [tmp_h_auto[-1], tmp_h_x[-1]], 1 )
+            
+        # dropout
+        h, regu_dense, out_dim = multi_dense(h, 2*size_layers_lstm[-1], num_dense,\
+                                             'dense', tf.gather(self.keep_prob, 0), max_norm)
+        
+        with tf.variable_scope("output"):
+            
+            w = tf.get_variable('w', shape=[out_dim, 1],\
+                                     initializer=tf.contrib.layers.xavier_initializer())
+            b = tf.Variable(tf.zeros([1]))
+            
+            self.y_hat = tf.squeeze( tf.nn.relu(tf.matmul(h, w) + b) )
+            
+            # regularization
+            # ?
+            self.regu = l2*tf.nn.l2_loss(w)
+            
+        # regularization
+        self.regu += l2*regu_dense
+        
+        # --- errors metric ---
+        
+        # RMSE
+        self.mse = tf.losses.mean_squared_error(self.y, self.y_hat)
+        self.rmse = tf.sqrt( self.mse )
+        self.mape = tf.reduce_mean( tf.abs((self.y - self.y_hat)/(self.y+1e-10)) )
+        # MAPE
+        # filtering before mape calculation
+        mask = tf.greater(self.y, 0.00001)
+        y_mask = tf.boolean_mask(self.y, mask)
+        y_hat_mask = tf.boolean_mask(self.y_hat, mask)
+        
+        self.mape = tf.reduce_mean( tf.abs((y_mask - y_hat_mask)/(y_mask+1e-10)) )
+        
+        # MAE
+        self.mae = tf.reduce_mean( tf.abs(self.y - self.y_hat) )
+        
+        # --- loss ---
+        self.loss = self.mse + self.regu
+        
+    
+    def model_reset(self):
+        self.init = tf.global_variables_initializer()
+        self.sess.run( self.init )
+        
+#   initialize loss and optimization operations for training
+    def train_ini(self):
+            
+        self.train = tf.train.AdamOptimizer(learning_rate = self.LEARNING_RATE)
+        self.optimizer =  self.train.minimize(self.loss)
+        
+        self.init = tf.global_variables_initializer()
+        self.sess.run(self.init)
+        
+        
+    #   training on batch of data
+    def train_batch(self, auto_train, x_train, y_train, keep_prob ):
+        
+        # !
+        _, c = self.sess.run([self.optimizer, self.loss], feed_dict={self.auto:auto_train, \
+                                                                     self.x:x_train,\
+                                                                     self.y:y_train,\
+                                                                     self.keep_prob:keep_prob })
+        return c
+    
+    #   infer givn testing data
+    def inference(self, auto_test, x_test, y_test, keep_prob):
+        
+        return self.sess.run([self.rmse, self.mae, self.mape], feed_dict = {self.auto:auto_test, \
+                                                                            self.x:x_test, \
+                                                                            self.y:y_test, \
+                                                                            self.keep_prob:keep_prob })
+    
+    #   predict givn testing data
+    def predict(self, auto_test, x_test, keep_prob):
+        
+        return self.sess.run( [self.y_hat], feed_dict = {self.auto:auto_test, \
+                                                         self.x:x_test, \
+                                                         self.keep_prob:keep_prob })
     

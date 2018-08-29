@@ -168,7 +168,7 @@ def gbt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, fix_lr, bool_cl
 
     fix_lr = 0.25
 
-    n_err, model0, train_err0 = gbt_n_estimatior( 250, xtrain, ytrain, xval, yval, fix_lr, bool_clf)
+    n_err, model0, train_err0 = gbt_n_estimatior( 200, xtrain, ytrain, xval, yval, fix_lr, bool_clf)
     print "n_estimator, RMSE:", train_err0, n_err
 
     depth_err, model1, train_err1 = gbt_tree_para( xtrain, ytrain, xval, yval, range(3,16), fix_lr, n_err[0], bool_clf )
@@ -410,7 +410,7 @@ def xgt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, num_c
     
     fix_lr = 0.2
 
-    n_depth_err, model0, train_err0 = xgt_n_depth( fix_lr, 16, 41, xtrain, ytrain, xval, yval, bool_clf, num_class)
+    n_depth_err, model0, train_err0 = xgt_n_depth( fix_lr, 10, 41, xtrain, ytrain, xval, yval, bool_clf, num_class)
     print " depth, number of rounds, RMSE:", train_err0, n_depth_err
 
     l2_err, model1, train_err1 = xgt_l2( fix_lr, n_depth_err[0], n_depth_err[1], xtrain, ytrain, xval, yval,\
@@ -429,7 +429,7 @@ def xgt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, num_c
         best_model = model0
         best_vali = n_depth_err[2]
         
-        # result_tuple [ # iteration, depth, l2, train error, validation error, test error ]
+        # result_tuple [ # depth, iteration, l2, train error, validation error, test error ]
         result_tuple = [ n_depth_err[0], n_depth_err[1], 0, best_train, best_vali ]
         
     else:

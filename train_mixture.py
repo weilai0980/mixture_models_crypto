@@ -43,16 +43,6 @@ para_loss_type = str(sys.argv[2])
 train_mode = str(sys.argv[3])
 # oneshot, roll, incre
 
-'''
-# ---- log file set-up ----
-
-# log files for training process 
-training_log  = "../bt_results/res/mix_train_log.txt"
-# initialize the log
-with open(training_log, "w") as text_file:
-    text_file.close()
-'''
-
 # ---- parameters specific to models ----
 
 para_y_log = False
@@ -64,7 +54,15 @@ para_bool_bilinear = True
 para_lr_linear = 0.001
 para_n_epoch_linear = 300
 para_batch_size_linear = 32
-para_l2_linear = 0.001
+#para_l2_linear = 0.001
+
+
+para_distr_type = 'gaussian'
+para_activation_type = 'leaky_relu'
+# relu, leaky_relu, linear
+para_pos_regu = True
+para_gate_type = 'softmax'
+
 
 # -- Bayes
 para_lr_bayes = 0.001
@@ -76,15 +74,11 @@ para_loss_sample_num = 10
 
 para_infer_type = 'variational_nocondi'
 
-para_distr_type = 'gaussian'
-para_activation_type = 'leaky_relu'
-# relu, leaky_relu, linear
-para_pos_regu = True
 
 # 'variational-nocondi', 'variational-condi', gibbs 
 # ---- training and evalution methods ----
     
-def train_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):   
+def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):   
     
     # stabilize the network by fixing the random seed
     np.random.seed(1)
@@ -101,9 +95,9 @@ def train_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):
             
             '''
             
-            clf = mixture_linear(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_auto, \
+            clf = mixture_linear(sess, para_lr_linear, para_l2, para_batch_size_linear, para_order_auto, \
                                  para_order_x, para_order_steps, para_y_log, para_bool_bilinear,\
-                                 para_loss_type, para_distr_type, para_activation_type, para_pos_regu)
+                                 para_loss_type, para_distr_type, para_activation_type, para_pos_regu, para_gate_type)
             
             # global para
             para_n_epoch = para_n_epoch_linear
@@ -144,9 +138,8 @@ def train_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):
         total_batch = int(total_cnt/para_batch_size)
         total_idx   = range(total_cnt)
         
-        
         # log training and validation errors over epoches
-        test_err_epoch = []
+        tmp_err_epoch = []
         
         #  begin training epochs
         for epoch in range(para_n_epoch):
@@ -172,35 +165,33 @@ def train_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):
                 tmpc = tmpc + float(clf.train_batch( batch_auto, batch_x, batch_y, para_keep_prob ))
             
             #?
-            tmp_train_acc = clf.inference(xtr_auto, xtr_x, ytrain, para_keep_prob)
+            tmp_train_rmse, tmp_train_mae, tmp_train_mape, tmp_train_regu = \
+            clf.inference(xtr_auto, xtr_x, ytrain, para_keep_prob)
             #?
-            tmp_test_acc  = clf.inference(xts_auto, xts_x, ytest,  para_keep_prob) 
+            tmp_test_rmse, tmp_test_mae, tmp_test_mape, tmp_test_regu = \
+            clf.inference(xts_auto, xts_x, ytest,  para_keep_prob) 
             
             # record for re-training the model afterwards
-            test_err_epoch.append( [epoch, tmp_train_acc[0], tmp_test_acc[0], tmpc] )
+            tmp_err_epoch.append( [epoch, tmp_train_rmse, tmp_test_rmse] )
             
             # training rmse, training regularization, testing rmse, testing regularization
-            print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, tmp_train_acc[0], tmp_train_acc[-1], \
-            tmp_test_acc[0], tmp_test_acc[-1]
+            print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, tmp_train_rmse, tmp_test_rmse
             
         print "Optimization Finished!"
-        
         
         # reset the model
         clf.model_reset()
         #clf.train_ini()
     
-        
     # clear the graph in the current session 
     tf.reset_default_graph()
     sess = tf.InteractiveSession()
 
-    return min(test_err_epoch, key = lambda x:x[2])
-    
+    return min(tmp_err_epoch, key = lambda x:x[-1])
     
     
 # retrain the model with the best parameter set-up        
-def validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, model_file, best_epoch ): 
+def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, model_file, best_epoch ): 
     
     # stabilize the network by fixing the random seed
     # fixing the seed will settle down all the random parameters over the entire routine below
@@ -213,9 +204,9 @@ def validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr
         
         if method == 'linear':
             
-            clf = mixture_linear(sess, para_lr_linear, para_l2_linear, para_batch_size_linear, para_order_auto, \
+            clf = mixture_linear(sess, para_lr_linear, para_l2, para_batch_size_linear, para_order_auto, \
                                   para_order_x, para_order_steps, para_y_log, para_bool_bilinear,\
-                                  para_loss_type, para_distr_type, para_activation_type, para_pos_regu)
+                                  para_loss_type, para_distr_type, para_activation_type, para_pos_regu, para_gate_type)
             
             # overall para 
             para_n_epoch = para_n_epoch_linear
@@ -250,6 +241,8 @@ def validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr
         total_cnt   = np.shape(xtrain)[0]
         total_batch = int(total_cnt/para_batch_size)
         total_idx   = range(total_cnt)
+        
+        tmp_epoch_err = []
 
         # training the model until the best epoch
         for epoch in range(best_epoch+1):
@@ -271,17 +264,22 @@ def validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr
                     batch_y = ytrain[batch_idx]
             
                 tmpc += clf.train_batch( batch_auto, batch_x, batch_y, para_keep_prob )
-                
-            #?
-            tmp_train_acc = clf.inference(xtr_auto, xtr_x, ytrain, para_keep_prob)
-            #?
-            tmp_test_acc  = clf.inference(xts_auto, xts_x, ytest,  para_keep_prob) 
             
-            print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, tmp_train_acc[0], tmp_train_acc[-1],\
-            tmp_test_acc[0], tmp_test_acc[-1] 
-        
+            
+            tmp_train_rmse, tmp_train_mae, tmp_train_mape, tmp_train_regu = \
+            clf.inference(xtr_auto, xtr_x, ytrain, para_keep_prob)
+            #?
+            tmp_test_rmse, tmp_test_mae, tmp_test_mape, tmp_test_regu = \
+            clf.inference(xts_auto, xts_x, ytest,  para_keep_prob) 
+            
+            # record for fixing the parameter set-up in testing
+            tmp_epoch_err.append( [epoch, tmp_train_rmse, tmp_test_rmse] )
+            
+            print "loss on epoch ", epoch, " : ", 1.0*tmpc/total_batch, tmp_train_rmse, tmp_test_rmse
+            
         print "Model Re-training Finished!"
         
+        '''
         # record prediction and mixture gate values 
         # [3, N]
         py_test = clf.predict(xts_auto, xts_x, para_keep_prob)
@@ -311,6 +309,7 @@ def validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr
             
             w2 = clf.collect_coeff_values("gate")
             np.asarray(w2[1]).dump( file_addr + "weight_gate_mix.dat" )
+        '''
         
         # reset the model 
         clf.model_reset()
@@ -319,7 +318,7 @@ def validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr
     tf.reset_default_graph()
     sess = tf.InteractiveSession()
     
-    return sqrt(mean((py_test[0]-ytest)*(py_test[0]-ytest)))
+    return [ [tmp_test_rmse, tmp_test_mae, tmp_test_mape], min(tmp_epoch_err, key = lambda x:x[-1]) ]
         
 def preprocess_feature_mixture(xtrain, xtest):
     
@@ -406,7 +405,7 @@ elif train_mode == 'roll' or 'incre':
         with open(res_file, "a") as text_file:
             text_file.write("\n %s Mixture %s  %s %s %s %s %s \n\n"%( "\n -------- Rolling --------- \n" if train_mode == 'roll' else "\n -------- Incremental --------- \n", method, para_loss_type, para_distr_type, 'bi-linear' if para_bool_bilinear == True else 'linear', para_activation_type, ('pos_regu' if para_pos_regu == True else 'no_pos_regu') ))
             
-        
+    
     elif method == 'bayes':
         
         with open(res_file, "a") as text_file:
@@ -422,12 +421,12 @@ elif train_mode == 'roll' or 'incre':
     print '--- Start the ' + train_mode + ' training: \n', np.shape(features_minu), np.shape(rvol_hour)
     
     # prepare the set of pairs of features and targets
-    x, y, var_explain = prepare_feature_target( features_minu, rvol_hour, all_loc_hour, \
-                                                para_order_minu, para_order_hour, bool_feature_selection, para_step_ahead )
+    x, y, var_explain = prepare_feature_target(features_minu, rvol_hour, all_loc_hour, \
+                                               para_order_minu, para_order_hour, \
+                                               bool_feature_selection, para_step_ahead, False)
     
     # set up the training and evaluation interval 
     interval_num = int(len(y)/interval_len)
-    
     
     
     # ---- the main loop
@@ -455,14 +454,14 @@ elif train_mode == 'roll' or 'incre':
             print '[ERROR] training mode'
         
         print '\n --- In processing of interval ', i-1, ' --- \n'
-        with open(res_file, "a") as text_file:
-            text_file.write( "Interval %d : " %(i-1) )
         
-        # process the data within the current interval, flatten or 
+        
+        # training, validation+testing split 
         if para_bool_bilinear == True:
             xtrain, ytrain, xtest, ytest = training_testing_mixture_rnn(tmp_x, tmp_y, para_train_split_ratio)
         else:
             xtrain, ytrain, xtest, ytest = training_testing_mixture_mlp(tmp_x, tmp_y, para_train_split_ratio)
+            
         
         # feature split, normalization READY
         xtr, xtr_exter, xtest, xtest_exter = preprocess_feature_mixture(xtrain, xtest)
@@ -514,33 +513,51 @@ elif train_mode == 'roll' or 'incre':
             print '     !! Flattened features !! '
         else:
             print ' [ERROR]  bi-linear '
+        
+        
+        # -- training and validation phase
+        
+        para_train_vali = []
+        
+        for para_l2 in [0.0001, 0.001, 0.01]:
             
-        # training and validation phase
-        # return lowest prediction errors and obj. loss  
-        tmp_error = train_mixture( xtr, xtr_exter, np.asarray(ytrain), xval, xval_exter, np.asarray(yval) )
+            tmp_epoch, tmp_tr_rmse, tmp_val_rmse = train_validate_mixture(xtr, xtr_exter, np.asarray(ytrain), xval, \
+                                                                 xval_exter, np.asarray(yval))
+            
+            para_train_vali.append( [para_l2, tmp_epoch, tmp_tr_rmse, tmp_val_rmse] )
+            
+            print 'Current parameter set-up: \n', para_train_vali[-1], '\n'
+            
         
-        # [best_epooch, training error, validation error, testing error]
-        result_tupe = [ tmp_error[0], tmp_error[1], tmp_error[2] ] 
-        best_epoch = tmp_error[0]
+        # -- testing phase
         
-        # testing phase
-        # fix the best epoch
+        final_para = min(para_train_vali, key = lambda x:x[-1])
+        para_l2 = final_para[0]
+        best_epoch = final_para[1]
+        
+        print ' ---- Best parameters : ', final_para, '\n'
+        
+        # fix the best parameter and epoch
+        
+        result_tupe = [final_para[2], final_para[3]]
+        
         if len(xts) == 0:
-            ts_error = validate_mixture( xtr, xtr_exter, np.asarray(ytrain), xval, xval_exter, np.asarray(yval),\
-                                        pred_file, model_file, best_epoch )
+            test_error = test_mixture(xtr, xtr_exter, np.asarray(ytrain), xval, xval_exter, np.asarray(yval),\
+                                          pred_file, model_file, best_epoch )
             result_tupe.append(None)
             
         else:
-            ts_error = validate_mixture( xtr, xtr_exter, np.asarray(ytrain), xts, xts_exter, np.asarray(yts),\
-                                        pred_file, model_file, best_epoch )
-            result_tupe.append(ts_error)
+            test_error = test_mixture(xtr, xtr_exter, np.asarray(ytrain), xts, xts_exter, np.asarray(yts),\
+                                          pred_file, model_file, best_epoch )
+            result_tupe.append(test_error)
+        
+        print ' ---- Training, validation and testing performance: ', final_para, test_error, '\n'
         
         
-        print ' ---- Training, validation and testing performance: ', tmp_error, ts_error
+        # -- log overall errors
         
-        # save overall errors
         with open(res_file, "a") as text_file:
-            text_file.write(" %s  \n"%(str(result_tupe)))
-
+            text_file.write("Interval %d : %s, %s \n" %(i-1, str(final_para[:2]), str(result_tupe)))
+        
 else:
     print '[ERROR] training mode'

@@ -115,7 +115,7 @@ def selection_on_minute_features(x):
     return ipca.transform(x), sum(ipca.explained_variance_ratio_)
 
 def prepare_feature_target(features_minu, vol_hour, all_loc_hour, \
-                           order_minu, order_hour, bool_feature_selection, step_gap):
+                           order_minu, order_hour, bool_feature_selection, step_gap, point_wise):
     
     tmpcnt = len(vol_hour)
     y = []
@@ -124,8 +124,11 @@ def prepare_feature_target(features_minu, vol_hour, all_loc_hour, \
     var_explained = []
     
     for i in range( order_hour + step_gap, tmpcnt ):
-        y.append( vol_hour[i] )
         
+        if all_loc_hour[i - order_hour - step_gap] - order_minu < 0:
+            continue
+        
+        y.append( vol_hour[i] )
         x.append( [ vol_hour[i - order_hour - step_gap : i - step_gap] ] )
         
         if len(features_minu)!=0:
@@ -133,7 +136,7 @@ def prepare_feature_target(features_minu, vol_hour, all_loc_hour, \
             tmp_minu_idx = all_loc_hour[i - step_gap] 
             
             if tmp_minu_idx - order_minu < 0:
-                print "Order_minute ?"
+                print(" ----- Order_minute ?")
                 
             if bool_feature_selection == True:
                 
@@ -144,8 +147,21 @@ def prepare_feature_target(features_minu, vol_hour, all_loc_hour, \
                 x[-1].append( tmpft )
                 
             else:
-                x[-1].append( features_minu[tmp_minu_idx-order_minu : tmp_minu_idx] )
-    
+                
+                if point_wise == False:
+                    
+                    x[-1].append(features_minu[tmp_minu_idx-order_minu : tmp_minu_idx])
+                
+                else:
+                    
+                    tmpx = []
+                    for k in range(i - order_hour - step_gap, i - step_gap):
+                        
+                        minu_idx = all_loc_hour[k] 
+                        tmpx.append(features_minu[minu_idx-order_minu : minu_idx])
+                
+                    x[-1].append( tmpx )
+                    
     return x,y, var_explained
 
 
@@ -161,20 +177,20 @@ def conti_normalization_train_dta(dta):
     else:
         return preprocessing.scale(dta)
 
-def conti_normalization_test_dta(dta, train):
+def conti_normalization_test_dta(dta, ref_data):
     
-    shape_train = np.shape(train)
+    shape_ref_data = np.shape(ref_data)
     shape_dta   = np.shape(dta)
     
-    if len(shape_train)>=3:
-        tmp_train = np.reshape(train, [shape_train[0], -1])
-        tmp_dta   = np.reshape(dta,   [shape_dta[0], -1])
+    if len(shape_ref_data)>=3:
+        tmp_ref_data = np.reshape(ref_data, [shape_ref_data[0], -1])
+        tmp_dta = np.reshape(dta,   [shape_dta[0], -1])
     else:
-        tmp_train = train
-        tmp_dta   = dta
+        tmp_ref_data = ref_data
+        tmp_dta = dta
     
-    mean_dim = np.mean(tmp_train, axis=0)
-    std_dim = np.std(tmp_train, axis=0)
+    mean_dim = np.mean(tmp_ref_data, axis=0)
+    std_dim = np.std(tmp_ref_data, axis=0)
     
 #    print '--test--', mean_dim, std_dim
     
@@ -187,7 +203,7 @@ def conti_normalization_test_dta(dta, train):
     for i in cols:
         df[i] = (dta_df[i]- mean_dim[i])*1.0/std_dim[i]
     
-    if len(shape_train)>=3:
+    if len(shape_ref_data)>=3:
         return np.reshape(df.as_matrix(), shape_dta)
     else:
         return df.as_matrix()
@@ -206,7 +222,7 @@ def training_testing_statistic(features_minu, vol_hour, all_loc_hour, order_minu
             tmp_minu_idx = all_loc_hour[i]
             
             if tmp_minu_idx - order_minu < 0:
-                print "Order_minute ?"
+                print("Order_minute ?")
             
             if bool_feature_selection == True:
                 
@@ -384,7 +400,7 @@ def cal_return_volatility_hour( loc_hour, price_minu, return_type ):
     rvol_hour.append( np.std(tmp_return) )
     return_minu += tmp_return
     
-    print 'Done'
+    print('Done')
     
     return return_minu, rvol_hour
 
@@ -402,7 +418,7 @@ def load_raw_order_book_files(file_addr, bool_dump):
 
     for i in range( len(files) ):
         dta_df = pd.read_csv( files[i] ,sep=',')
-        print "Current : " + files[i], dta_df.shape
+        print("Current : " + files[i], dta_df.shape)
     
         all_df = dta_df
     
@@ -418,7 +434,7 @@ def load_raw_order_book_files(file_addr, bool_dump):
         
         
         minute_tick = list(all_df['date_time'].unique())
-        print "   ", len(minute_tick), minute_tick[-1]
+        print("   ", len(minute_tick), minute_tick[-1])
     
         dta_minu = [] 
         tmp_hour = []
@@ -450,7 +466,7 @@ def load_raw_order_book_files(file_addr, bool_dump):
         all_dta_minu += dta_minu
         all_loc_hour += loc_hour
     
-        print "   ", len(all_dta_minu), len(all_loc_hour)
+        print("   ", len(all_dta_minu), len(all_loc_hour))
     
     if bool_dump == True:
         np.asarray(all_dta_minu).dump("../dataset/bitcoin/dta_minu.dat")

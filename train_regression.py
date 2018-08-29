@@ -88,6 +88,7 @@ def train_eval_models( xtrain, ytrain, xval, yval, xtest, ytest, autotrain, auto
     # EWMA
     if 'ewma' in model_list:
         if para_step_ahead != 0 or len(xtest) != 0: 
+            
             tmperr = ewma_instance_validate(autotrain, ytrain, autoval, yval, autotest, ytest, result_file, file_path)
         
         else:
@@ -153,11 +154,13 @@ elif train_mode == 'roll' or 'incre':
     # prepare pairs of features and targets
     # auto-regressive feature first
     if bool_add_feature == True:
-        x, y, var_explain = prepare_feature_target( features_minu, rvol_hour, all_loc_hour, \
-                                                    para_order_minu, para_order_hour, bool_feature_selection, para_step_ahead)
+        x, y, var_explain = prepare_feature_target(features_minu, rvol_hour, all_loc_hour, \
+                                                   para_order_minu, para_order_hour, \
+                                                   bool_feature_selection, para_step_ahead, False)
     else:
-        x, y, var_explain = prepare_feature_target( [], rvol_hour, all_loc_hour, \
-                                                    para_order_minu, para_order_hour, bool_feature_selection, para_step_ahead)
+        x, y, var_explain = prepare_feature_target([], rvol_hour, all_loc_hour, \
+                                                   para_order_minu, para_order_hour, \
+                                                   bool_feature_selection, para_step_ahead, False)
     
     # set up the training and evaluation interval 
     interval_num = int(len(y)/interval_len)

@@ -49,10 +49,6 @@ def linear( x, dim_x, scope, bool_bias ):
         #l2
         regularizer = tf.nn.l2_loss(w)
         
-        # hinge regularization
-        # vec_zero = tf.zeros([dim_x, ]) 
-        # hinge_w = tf.maximum(vec_zero, w)
-            
     return tf.squeeze(h), regularizer
 
 '''
@@ -103,6 +99,7 @@ def bilinear( x, shape_one_x, scope, bool_bias ):
     #tf.nn.l2_loss(w_t) tf.reduce_sum(tf.abs(w_v)
     return tf.squeeze(h), [ tf.reduce_mean(tf.square(w_t)), tf.reduce_mean(tf.abs(w_v)) ] 
 
+'''
 # shape of x: [b, t, v]
 def bilinear_with_external( x, shape_one_x, exter, exter_dim, scope, bool_bias ):
     
@@ -121,7 +118,7 @@ def bilinear_with_external( x, shape_one_x, exter, exter_dim, scope, bool_bias )
         tmph = tf.tensordot(x, w_v, 1)
         tmph = tf.squeeze(tmph, [2])
         
-        '''
+        
         w_mat_l = tf.Variable(name = 'i_mat_left', initial_value = \
                           tf.random_normal([exter_dim, 1], stddev = math.sqrt(1.0/float(exter_dim))) )
         
@@ -136,7 +133,7 @@ def bilinear_with_external( x, shape_one_x, exter, exter_dim, scope, bool_bias )
         i_h = tf.expand_dims(i_h, -1)
         tmp_i_h = tf.reduce_sum(i_h*x, 1)
         i_b = tf.matmul(tmp_i_h, w_vec)
-        '''
+        
         
         if bool_bias == True:
             h = tf.matmul(tmph, w_t) + tf.matmul(exter, w_ex) + b 
@@ -147,14 +144,14 @@ def bilinear_with_external( x, shape_one_x, exter, exter_dim, scope, bool_bias )
     
     #tf.nn.l2_loss(w_t) tf.reduce_sum(tf.abs(w_v)
     return tf.squeeze(h), [ tf.nn.l2_loss(w_t) + tf.nn.l2_loss(w_v), tf.nn.l2_loss(w_ex) ] 
-
+'''
 
 # ---- Mixture linear ----
 
 class mixture_linear():
 
     def __init__(self, session, lr, l2, batch_size, steps_auto, dim_x, steps_x, bool_log, bool_bilinear, \
-                 loss_type, distr_type, activation_type, pos_regu):
+                 loss_type, distr_type, activation_type, pos_regu, gate_type):
         
         # build the network graph 
         self.LEARNING_RATE = lr
@@ -240,30 +237,48 @@ class mixture_linear():
         # --- gate weights of individual models
         
         # logstic
-        '''
-        if bool_bilinear == True:
-            self.logit, regu_gate = bilinear(self.x, [steps_x, dim_x], 'gate_x', True)
+        if gate_type == 'logstic-partial':
             
-        else:
-            self.logit, regu_gate = linear(self.x, dim_x, 'gate_x', True)
-        
-        self.gates = tf.stack( [1.0 - tf.sigmoid(self.logit), tf.sigmoid(self.logit)] ,1 )
-        '''
-        
-        # softmax
-        logit_v, regu_v_gate = linear(self.auto, steps_auto, 'gate_v', True)
-        
-        if bool_bilinear == True:
-            # ?
-            logit_x, regu_x_gate = bilinear(self.x, [steps_x, dim_x], 'gate_x', True)
+            if bool_bilinear == True:
+                self.logit, regu_gate = bilinear(self.x, [steps_x, dim_x], 'gate_x', True)
             
+            else:
+                self.logit, regu_gate = linear(self.x, dim_x, 'gate_x', True)
+        
+            self.gates = tf.stack( [1.0 - tf.sigmoid(self.logit), tf.sigmoid(self.logit)] ,1 )
+        
+        elif gate_type == 'logstic-concat':
+            
+            logit_v, regu_v_gate = linear(self.auto, steps_auto, 'gate_v', True)
+        
+            if bool_bilinear == True:
+                logit_x, regu_x_gate = bilinear(self.x, [steps_x, dim_x], 'gate_x', True)
+            
+            else:
+                logit_x, regu_x_gate = linear(self.x, dim_x, 'gate_x', True)
+            
+            self.logit = logit_v + logit_x
+            
+            self.gates = tf.stack( [1.0 - tf.sigmoid(self.logit), tf.sigmoid(self.logit)] ,1 )
+            
+        # softmax 
+        elif gate_type == 'softmax':
+            
+            logit_v, regu_v_gate = linear(self.auto, steps_auto, 'gate_v', True)
+        
+            if bool_bilinear == True:
+                logit_x, regu_x_gate = bilinear(self.x, [steps_x, dim_x], 'gate_x', True)
+            
+            else:
+                logit_x, regu_x_gate = linear(self.x, dim_x, 'gate_x', True)
+        
+            self.logit = tf.squeeze( tf.stack([logit_v, logit_x], 1) )
+            self.gates = tf.nn.softmax(self.logit)
+        
         else:
-            logit_x, regu_x_gate = linear(self.x, dim_x, 'gate_x', True)
-        
-        self.logit = tf.squeeze( tf.stack([logit_v, logit_x], 1) )
-        self.gates = tf.nn.softmax(self.logit)
-        
-        
+            
+            print '\n ----- [ERROR] gate type \n'
+            
         # --- negative log likelihood 
         
         if distr_type == 'gaussian':
@@ -318,14 +333,25 @@ class mixture_linear():
                             
             elif loss_type == 'lk' and distr_type == 'gaussian':
                 
-                self.regu = 0.001*(regu_v_mean) + 0.001*(regu_x_mean[0]) + 0.001*(regu_x_mean[1])\
-                        + 0.0001*(regu_v_gate) + 0.00001*(regu_x_gate[0] + regu_x_gate[1])\
-                        + 0.00001*(regu_v_var + regu_x_var)
+                
+                #self.regu = 0.001*(regu_v_mean) + 0.001*(regu_x_mean[0]) + 0.001*(regu_x_mean[1])\
+                #        + 0.0001*(regu_v_gate) + 0.00001*(regu_x_gate[0] + regu_x_gate[1])\
+                #        + 0.00001*(regu_v_var + regu_x_var)
+                        #+ 0.001*regu_mean_diver   
+                
+                # activation and hinge regularization 
+                #if pos_regu == True:
+                #    self.regu += 0.001*regu_mean_pos
+                    
+                    
+                self.regu = l2*regu_v_mean + l2*regu_x_mean[0] + l2*regu_x_mean[1]\
+                            + 0.1*l2*regu_v_gate + 0.01*l2*(regu_x_gate[0] + regu_x_gate[1])\
+                            + 0.01*l2*(regu_v_var + regu_x_var)
                         #+ 0.001*regu_mean_diver   
                 
                 # activation and hinge regularization 
                 if pos_regu == True:
-                    self.regu += 0.001*regu_mean_pos
+                    self.regu += l2*regu_mean_pos
                     
                 
             elif loss_type == 'sq' and distr_type == 'log':
@@ -407,7 +433,15 @@ class mixture_linear():
         # MAE
         self.mae  = tf.reduce_mean( tf.abs(self.y - self.y_hat) )
         # MAPE
-        self.mape = tf.reduce_mean( tf.abs((self.y - self.y_hat)/(self.y+1e-10)) )
+        
+        mask = tf.greater(tf.abs(self.y), 0.00001)
+        
+        y_mask = tf.boolean_mask(self.y, mask)
+        y_hat_mask = tf.boolean_mask(self.y_hat, mask)
+        
+        self.mape = tf.reduce_mean( tf.abs((y_mask - y_hat_mask)/(y_mask+1e-10)) )
+        
+        #self.mape = tf.reduce_mean( tf.abs((self.y - self.y_hat)/(self.y+1e-10)) )
         
     def model_reset(self):
         self.init = tf.global_variables_initializer()
@@ -1133,10 +1167,17 @@ class variational_mixture_linear_condition():
         # RMSE
         self.mse  = tf.losses.mean_squared_error( self.y, self.y_hat )
         self.rmse = tf.sqrt(self.mse)
+        
         # MAE
         self.mae  = tf.reduce_mean( tf.abs(self.y - self.y_hat) )
+        
         # MAPE
-        self.mape = tf.reduce_mean( tf.abs((self.y - self.y_hat)/(self.y+1e-10)) )
+        mask = tf.greater(tf.abs(self.y), 0.000001)
+        
+        y_mask = tf.boolean_mask(self.y, mask)
+        y_hat_mask = tf.boolean_mask(self.y_hat, mask)
+        
+        self.mape = tf.reduce_mean( tf.abs((y_mask - y_hat_mask)/(y_mask+1e-10)) )
         
     def model_reset(self):
         self.init = tf.global_variables_initializer()

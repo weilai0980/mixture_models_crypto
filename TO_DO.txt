@@ -105,12 +105,9 @@ Paper write-up:
    
    cycle and bias terms in structural time series model,  
    
-
 Baseline:
   moving average and filter
   aggregate to the same grnularity, gaussian process 
-  
-
 
 TM-G + hard non-negative mean: relu
 TM-G + soft non-negative mean: regularization
@@ -126,6 +123,19 @@ Bayesian:
 
 relu or linear output activation
 
+* lstm-mixture 
+* mape computation
+
+* learning rate decay
+* GRU 
+
+* adaptive moving average logit 
+
+  fine tune
+  activation on the last layer
+  bias in _linear function
+  
+  
 ---- To Do ----
 
 Baseline:
@@ -133,6 +143,8 @@ Baseline:
   Time series forecasting using a hybrid ARIMA and neural network model
   
   dynamical linear system, phrophet, ARIMA+GARCH, ARIMA + RNN
+  
+  MAPE for regression models
 
 
 Model interpretion:
@@ -162,22 +174,21 @@ Bayesian version:
 
 Neural version:
   
-  * representation learning on raw order book data
-  * lstm-mixture  
-  * adaptive moving average logit 
+  * batch normalization for dense layers, layer normalization for rnn
+    
+  * correlation between validation and testing data
+  * feature or representation learning on raw order book data v.s. context or mixture 
+  * fully point-wise
   
   dynamics of hidden variables via an additional RNN : Neural Machine Translation with Recurrent Attention Modeling
   
-  fine tune
-  
   attention
   gate constraint, gate stability problem 
-  gate logit activaition from neural network 
+  gate logit activaition from neural network
+  
   smooth on expert gate: Learning Factored Representations in a Deep Mixture of Experts
-  activation on the last layer
-  bias in _linear function
-
-
+  
+  
 Models:
    
   **hidden state difference

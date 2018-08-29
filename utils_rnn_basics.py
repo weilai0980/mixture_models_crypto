@@ -31,11 +31,11 @@ def multi_mv_dense( num_layers, keep_prob, h_vari, dim_vari, scope, num_vari, \
             h_mv_input = tf.nn.dropout(h_mv_input, tf.gather(keep_prob, 0))
             # h_mv [V B d]
             # ? max norm constrains
-            h_mv_input, tmp_regu_dense = mv_dense(h_mv_input, \
-                                                  in_dim_vari,\
-                                                  scope+str(i),\
-                                                  num_vari, \
-                                                  out_dim_vari,\
+            h_mv_input, tmp_regu_dense = mv_dense(h_mv_input, 
+                                                  in_dim_vari,
+                                                  scope+str(i),
+                                                  num_vari,
+                                                  out_dim_vari,
                                                   False, max_norm_regul, regul_type)
             
             reg_mv_dense += tmp_regu_dense
@@ -155,32 +155,46 @@ def res_lstm(x, hidden_dim, n_layers, scope, dropout_keep_prob):
              
     return hiddens, state
 
-def plain_lstm(x, dim_layers, scope, dropout_keep_prob):
-    
-    #dropout
-    #x = tf.nn.dropout(x, dropout_keep_prob)
+def plain_rnn(x, dim_layers, scope, dropout_keep_prob, cell_type):
     
     with tf.variable_scope(scope):
         
+        if cell_type == 'lstm':
+            
             tmp_cell = tf.nn.rnn_cell.LSTMCell(dim_layers[0], \
                                                initializer= tf.contrib.keras.initializers.glorot_normal())
+        elif cell_type == 'gru':
             
-            # dropout
-            lstm_cell = tf.nn.rnn_cell.DropoutWrapper(tmp_cell, state_keep_prob = tf.gather(dropout_keep_prob, 0))
+            tmp_cell = tf.nn.rnn_cell.GRUCell(dim_layers[0], \
+                                              kernel_initializer= tf.contrib.keras.initializers.glorot_normal())
             
-            hiddens, state = tf.nn.dynamic_rnn(cell = lstm_cell, inputs = x, dtype = tf.float32)
+        # dropout on hidden states
+        rnn_cell = tf.nn.rnn_cell.DropoutWrapper(tmp_cell,\
+                                                 state_keep_prob = tf.gather(dropout_keep_prob, 0))
+            
+        hiddens, state = tf.nn.dynamic_rnn(cell = rnn_cell, inputs = x, dtype = tf.float32)
         
         
     for i in range(1,len(dim_layers)):
         
         with tf.variable_scope(scope+str(i)):
-            tmp_cell = tf.nn.rnn_cell.LSTMCell(dim_layers[i], \
-                                                    initializer= tf.contrib.keras.initializers.glorot_normal())
             
-            # dropout
-            lstm_cell = tf.nn.rnn_cell.DropoutWrapper(tmp_cell, state_keep_prob = tf.gather(dropout_keep_prob, 0))
+            if cell_type == 'lstm':
+                
+                tmp_cell = tf.nn.rnn_cell.LSTMCell(dim_layers[i], \
+                                                   initializer= tf.contrib.keras.initializers.glorot_normal())
+            elif cell_type == 'gru':
+                
+                tmp_cell = tf.nn.rnn_cell.GRUCell(dim_layers[i], \
+                                                  kernel_initializer= tf.contrib.keras.initializers.glorot_normal())
             
-            hiddens, state = tf.nn.dynamic_rnn(cell = lstm_cell, inputs = hiddens, dtype = tf.float32)
+            
+            # dropout on both input and hidden states
+            rnn_cell = tf.nn.rnn_cell.DropoutWrapper(tmp_cell,\
+                                                     input_keep_prob = tf.gather(dropout_keep_prob, 0), \
+                                                     state_keep_prob = tf.gather(dropout_keep_prob, 0))
+            
+            hiddens, state = tf.nn.dynamic_rnn(cell = rnn_cell, inputs = hiddens, dtype = tf.float32)
                 
     return hiddens, state 
 
