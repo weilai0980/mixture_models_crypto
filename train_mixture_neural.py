@@ -43,7 +43,7 @@ para_step_ahead = para_dict['para_step_ahead']
 
 # -- LSTM concate 
 
-para_n_epoch = 120
+para_n_epoch = 100
 
 # regularization 
 para_batch_size = 64
@@ -63,7 +63,7 @@ para_gate_type = 'ada-ma'
 # if logisitics, nothing to do with para_gate_logit_shared
 para_gate_logit_shared = True
 
-para_decay_step = 100000
+para_decay_step = 500
 
 # ---- training and evalution methods ----
     
@@ -110,8 +110,6 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xval_auto, xval_x, yval ):
         total_batch = int(total_cnt/para_batch_size)
         total_idx   = range(total_cnt)
         
-        
-        
         # begin training epochs
         
         # epoch-wise errors
@@ -137,7 +135,6 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xval_auto, xval_x, yval ):
                 else:
                     batch_y = ytrain[batch_idx]
                 
-                
                 # learning rate decay
                 if (i + total_batch*epoch)%para_decay_step == 0:
                     
@@ -147,7 +144,6 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xval_auto, xval_x, yval ):
                     
                     tmpc += clf.train_batch(batch_auto, batch_x, batch_y, para_keep_prob, \
                                             False, 0.0 )
-                    
             #?
             tmp_train_rmse, tmp_train_mae, tmp_train_mape = clf.inference(xtr_auto, xtr_x, ytrain, [1.0, 1.0])
             #?
@@ -171,7 +167,6 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xval_auto, xval_x, yval ):
     return min(tmp_epoch_err, key = lambda x:x[-1])
     
     
-    
 # retrain the model with the best parameter set-up        
 def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, model_file, best_epoch ): 
     
@@ -180,15 +175,20 @@ def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, mo
     np.random.seed(1)
     tf.set_random_seed(1)
     
-    
     # reshape the data for lstm
     if len(np.shape(xtr_auto))==2:
         xts_auto = np.expand_dims( xts_auto, 2 )
         xtr_auto = np.expand_dims( xtr_auto,  2 )
-            
+    
+    # fixed parameters
+    para_steps = [ para_order_hour, para_order_minu ]  
+    para_dims =  [ 1, np.shape(xtr_x)[-1] ]
+    
+    '''
     # fixed parameters
     para_steps = [ len(xtr_auto[0]), len(xtr_x[0]) ]  
     para_dims =  [ 1, len(xtr_x[0][0])]
+    '''
     
     print("Re-train the model at epoch ", best_epoch)
     
@@ -220,8 +220,8 @@ def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, mo
         total_cnt   = np.shape(xtr_auto)[0]
         total_batch = int(total_cnt/para_batch_size)
         total_idx   = range(total_cnt)
-
         
+        # epoch-wise error record
         tmp_epoch_err = []
         
         # training the model until the best epoch
@@ -461,10 +461,10 @@ elif train_mode == 'roll' or 'incre':
         
         para_train_vali = []
         
-        for para_lr in [0.0005]:
-            for para_dense_num in [0, 1]:
-                for para_keep_prob in [ [1.0], [0.5] ]:
-                    for para_l2 in [0.0001, 0.001, 0.01, 0.05]:
+        for para_lr in [ 0.0005 ]:
+            for para_dense_num in [ 0, 1 ]:
+                for para_keep_prob in [ [1.0], [0.8] ]:
+                    for para_l2 in [ 0.001, 0.005, 0.01, 0.05, 0.1 ]:
                         
                         # apply max_norm contraint only when dropout is used
                         if para_keep_prob[0] <1.0:
@@ -492,7 +492,6 @@ elif train_mode == 'roll' or 'incre':
                         
                         print("Current erros: \n", para_train_vali[-1], "\n")
                         
-        
         # -- testing phase
         
         # fix the best hyper-parameter, epoch
