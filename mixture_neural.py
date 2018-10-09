@@ -182,7 +182,8 @@ class lstm_mixture():
             return h
     
     def __init__(self, session, lr, l2, steps_auto, dim_x, steps_x, num_dense, max_norm, lstm_size_layers,\
-                 loss_type, activation_type, bool_pos_regu, gate_type, bool_gate_logit_shared, bool_point_wise):
+                 loss_type, activation_type, bool_pos_regu, gate_type, bool_gate_logit_shared, bool_point_wise,
+                 rnn_type):
         
         # --- hyper-parameters 
         
@@ -208,7 +209,7 @@ class lstm_mixture():
         # B: batch
         # T: step of Y
         # D: dimension of hidden states
-        h_auto_seq, _ = plain_rnn( self.auto, lstm_size_layers[0], 'rnn_auto', self.keep_prob, 'gru' )
+        h_auto_seq, _ = plain_rnn( self.auto, lstm_size_layers[0], 'rnn_auto', self.keep_prob, rnn_type )
         
         # obtain the last hidden state
         tmp_h_auto = tf.transpose( h_auto_seq, [1,0,2] )[-1]
@@ -230,7 +231,7 @@ class lstm_mixture():
             # initialize placeholders
             self.x = tf.placeholder(tf.float32, [None, steps_x, dim_x])
             
-            h_x_seq, _ = plain_rnn(self.x, lstm_size_layers[1], 'rnn_x', self.keep_prob, 'gru')
+            h_x_seq, _ = plain_rnn(self.x, lstm_size_layers[1], 'rnn_x', self.keep_prob, rnn_type)
             tmp_h_x = tf.transpose( h_x_seq, [1,0,2] )[-1]
             
         else:
@@ -245,7 +246,7 @@ class lstm_mixture():
             flatten_x = tf.reshape(self.x, [-1, steps_x, dim_x])
             
             # [B*T S D]
-            h_x, _ = plain_rnn(flatten_x, lstm_size_layers[1], 'rnn_x', self.keep_prob, 'gru')
+            h_x, _ = plain_rnn(flatten_x, lstm_size_layers[1], 'rnn_x', self.keep_prob, rnn_type)
             
             # [B T S D]
             h_x_point_wise = tf.reshape(h_x, [-1, steps_auto, steps_x, lstm_size_layers[1][-1]])
@@ -261,7 +262,7 @@ class lstm_mixture():
         h_x, regu_dense_x, out_dim = multi_dense(tmp_h_x, 
                                                  lstm_size_layers[1][-1], 
                                                  num_dense, 
-                                                 'dense_x', \
+                                                 'dense_x', 
                                                  tf.gather(self.keep_prob, 0), 
                                                  max_norm)
         
@@ -325,7 +326,7 @@ class lstm_mixture():
             
         elif gate_type == 'logistic-concat':
             
-            tmp_logit, regu_gate = one_dense(tf.concat([tmp_h_x, tmp_h_a], 1), \
+            tmp_logit, regu_gate = one_dense(tf.concat([tmp_h_x, tmp_h_auto], 1), \
                                              lstm_size_layers[0][-1] + lstm_size_layers[1][-1], \
                                              'logit', 1, 'linear', False, True)
             
@@ -450,11 +451,11 @@ class lstm_mixture():
         
         # MAPE
         # filtering before mape calculation
-        mask = tf.greater(self.y, 0.00001)
+        mask = tf.greater(tf.abs(self.y), 0.00001)
         y_mask = tf.boolean_mask(self.y, mask)
         y_hat_mask = tf.boolean_mask(self.y_hat, mask)
         
-        self.mape = tf.reduce_mean( tf.abs((y_mask - y_hat_mask)/(y_mask+1e-10)) )
+        self.mape = tf.reduce_mean(tf.abs( (y_mask - y_hat_mask)/(y_mask+1e-10) ))
         
         # MAE
         self.mae = tf.reduce_mean(tf.abs(self.y - self.y_hat))

@@ -171,14 +171,38 @@ Bayesian version:
   gibbs
   uncertainty analysis
 
+Data inspection:
+   
+  * partial R square on statistical model 
+
 
 Neural version:
   
+  * knowledge enhanced data 
+  
+  * temporal jump mixture  
+  * mixtrure + hawkes process
+
+  * target value decomposition
+  * multi-task
+  * representation learning
+  
+  
+  * hidden dependency in statistical , z_t and z_{t-1}
+  * relation to temporal smooth regularization
+  
+  * Bswish activation
+  * simplfy adaptive weighted moving average
+  * add auxliary loss
+  * observe the hidden state variation
+  
   * batch normalization for dense layers, layer normalization for rnn
-    
+  
+  * gate value inspectation
+  
   * correlation between validation and testing data
   * feature or representation learning on raw order book data v.s. context or mixture 
-  * fully point-wise
+  
   
   dynamics of hidden variables via an additional RNN : Neural Machine Translation with Recurrent Attention Modeling
   

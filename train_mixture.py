@@ -56,13 +56,11 @@ para_n_epoch_linear = 300
 para_batch_size_linear = 32
 #para_l2_linear = 0.001
 
-
 para_distr_type = 'gaussian'
-para_activation_type = 'leaky_relu'
+para_activation_type = 'linear'
 # relu, leaky_relu, linear
 para_pos_regu = True
 para_gate_type = 'softmax'
-
 
 # -- Bayes
 para_lr_bayes = 0.001
@@ -415,9 +413,9 @@ elif train_mode == 'roll' or 'incre':
     # ---- prepare the data
     
     # load raw feature and target data
-    features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat")
-    rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat")
-    all_loc_hour = np.load("../dataset/bitcoin/loc_hour.dat")
+    features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat" )
+    rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat" )
+    all_loc_hour = np.load("../dataset/bitcoin/loc_hour.dat" )
     print '--- Start the ' + train_mode + ' training: \n', np.shape(features_minu), np.shape(rvol_hour)
     
     # prepare the set of pairs of features and targets

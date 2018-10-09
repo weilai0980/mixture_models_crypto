@@ -153,6 +153,8 @@ class mixture_linear():
     def __init__(self, session, lr, l2, batch_size, steps_auto, dim_x, steps_x, bool_log, bool_bilinear, \
                  loss_type, distr_type, activation_type, pos_regu, gate_type):
         
+        # bool_hidden_depen
+        
         # build the network graph 
         self.LEARNING_RATE = lr
                 

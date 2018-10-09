@@ -25,6 +25,7 @@ print('--- Argument List:', str(sys.argv))
 method = str(sys.argv[1])
 train_mode = str(sys.argv[2])
 # oneshot, roll, incre
+# gpu_id = str(sys.argv[3])
 
 # ---- parameter set-up from parameter-file ----
 
@@ -55,14 +56,16 @@ para_y_log = False
 
 para_loss_type = 'gaussian'
 para_activation_type = 'linear'
+# linear, relu, leaky_relu, tanh 
 para_pos_regu = True
 
 para_x_pointwise = True
-para_gate_type = 'ada-ma'
-# ada-ma, softmax-linear
+para_gate_type = 'logistic-concat'
+# ada-ma, softmax-linear,  softmax-mlp, logistic-concat, logistic-partial 
 # if logisitics, nothing to do with para_gate_logit_shared
 para_gate_logit_shared = True
 
+para_rnn_type = 'gru'
 para_decay_step = 500
 
 # ---- training and evalution methods ----
@@ -81,7 +84,13 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xval_auto, xval_x, yval ):
     para_steps = [ para_order_hour, para_order_minu ]  
     para_dims =  [ 1, np.shape(xtr_x)[-1] ]
     
-    with tf.Session() as sess:
+    with tf.device('/device:GPU:5'):
+        
+        config = tf.ConfigProto(allow_soft_placement = True)
+        sess = tf.Session(config = config)
+        
+        #sess = tf.Session()    
+    #with tf.Session() as sess:
         
         if method == 'lstm-concat':
             
@@ -89,14 +98,13 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xval_auto, xval_x, yval ):
                               para_steps[0], para_dims[1], para_steps[1], \
                               para_dense_num, para_max_norm, para_lstm_sizes)
             
-            
         elif method == 'lstm-mixture':
             
             clf = lstm_mixture(sess, para_lr, para_l2, \
                                para_steps[0], para_dims[1], para_steps[1], \
                                para_dense_num, para_max_norm, para_lstm_sizes, \
                                para_loss_type, para_activation_type, para_pos_regu, \
-                               para_gate_type, para_gate_logit_shared, para_x_pointwise)
+                               para_gate_type, para_gate_logit_shared, para_x_pointwise, para_rnn_type)
             
         else:
             print("\n --- [ERROR] Need to specify a model --- \n")
@@ -108,7 +116,7 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xval_auto, xval_x, yval ):
         # set up training batch parameters
         total_cnt   = np.shape(xtr_auto)[0]
         total_batch = int(total_cnt/para_batch_size)
-        total_idx   = range(total_cnt)
+        total_idx   = list(range(total_cnt))
         
         # begin training epochs
         
@@ -192,7 +200,14 @@ def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, mo
     
     print("Re-train the model at epoch ", best_epoch)
     
-    with tf.Session() as sess:
+    with tf.device('/device:GPU:5'):
+        
+        
+    
+    #with tf.Session() as sess:
+        
+        sess = tf.Session()
+        #config=tf.ConfigProto(log_device_placement=True)
         
         print('---- parameter and epoch set-up in testing:', para_dense_num, para_keep_prob, para_l2, best_epoch)
         
@@ -207,7 +222,7 @@ def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, mo
                                para_steps[0], para_dims[1], para_steps[1], \
                                para_dense_num, para_max_norm, para_lstm_sizes, \
                                para_loss_type, para_activation_type, para_pos_regu, \
-                               para_gate_type, para_gate_logit_shared, para_x_pointwise)
+                               para_gate_type, para_gate_logit_shared, para_x_pointwise, para_rnn_type)
             
         else:
             print("     [ERROR] Need to specify a model")
@@ -219,7 +234,7 @@ def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, mo
         # setup mini-batch parameters
         total_cnt   = np.shape(xtr_auto)[0]
         total_batch = int(total_cnt/para_batch_size)
-        total_idx   = range(total_cnt)
+        total_idx   = list(range(total_cnt))
         
         # epoch-wise error record
         tmp_epoch_err = []
@@ -371,7 +386,7 @@ elif train_mode == 'roll' or 'incre':
     pred_file = ""
     
     with open(res_file, "a") as text_file:
-            text_file.write("\n %s %s %s %s %s %s %s %s %s \n\n"%( \
+            text_file.write("\n %s %s %s %s %s %s %s %s %s %s \n\n"%( \
        "\n -------- Rolling --------- \n" if train_mode == 'roll' else "\n -------- Incremental --------- \n",\
                                                             method,\
                                                             str(para_lstm_sizes),\
@@ -380,14 +395,16 @@ elif train_mode == 'roll' or 'incre':
                                         ' pos_regu ' if para_pos_regu == True else ' NO_pos_regu ',\
                                                             str(para_gate_type),\
                           ' point_wise ' if para_x_pointwise == True else ' last_step ',\
-                          ' logit_weight_shared ' if para_gate_logit_shared == True else ' logit_weight_NO_shared ' ))
+                          ' logit_weight_shared ' if para_gate_logit_shared == True else ' logit_weight_NO_shared ',\
+                                                            para_rnn_type))
+                           
             
     # ---- prepare the data
     
     # load raw feature and target data
-    features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat")
-    rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat")
-    all_loc_hour = np.load("../dataset/bitcoin/loc_hour.dat")
+    features_minu = np.load("../dataset/bitcoin/training_data/feature_minu.dat", encoding='latin1')
+    rvol_hour = np.load("../dataset/bitcoin/training_data/return_vol_hour.dat", encoding='latin1')
+    all_loc_hour = np.load("../dataset/bitcoin/loc_hour.dat", encoding='latin1')
     print('--- Start the ' + train_mode + ' training: \n', np.shape(features_minu), np.shape(rvol_hour))
     
     # prepare the set of pairs of feature - target
@@ -473,7 +490,7 @@ elif train_mode == 'roll' or 'incre':
                             para_max_norm = 0.0
                             
                         print("Current parameter set-up: \n", para_lstm_sizes, para_lr, para_dense_num, \
-                              para_keep_prob, para_l2, para_decay_step, "\n")    
+                              para_keep_prob, para_l2, para_decay_step, para_rnn_type, "\n")    
                     
                         # return the parameter set-up and epoch with the lowest validation errors and llk 
                         tmp_best_epoch, tmp_train_err, tmp_vali_err = train_validate_mixture(xtr_auto, 
