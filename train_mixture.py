@@ -14,34 +14,46 @@ import math
 import random
 from random import shuffle
 
+import json
+
 # local packages 
 from utils_libs import *
 from utils_data_prep import *
 from mixture import *
 
-# ---- parameter set-up from parameter-file ----
+# ---- parameters from command line
 
-para_dict = para_parser("para_file.txt")
+'''
+Arguments:
+
+method: linear, bayes
+para_loss_type: lk, sg
+train_mode: oneshot, roll, incre
+    
+'''
+
+print '--- Argument List:', str(sys.argv)
+method = str(sys.argv[1])
+para_loss_type = str(sys.argv[2])
+train_mode = str(sys.argv[3])
+
+# ---- parameter from config ----
+
+#para_dict = para_parser("para_file.txt")
+
+with open('config.json') as f:
+    para_dict = json.load(f)
+    print(para_dict) 
 
 para_order_minu = para_dict['para_order_minu']
 para_order_hour = para_dict['para_order_hour']
-bool_feature_selection = para_dict['bool_feature_selection']
+bool_feature_selection = False if para_dict['bool_feature_selection'] == 'False' else True
 
 interval_len = para_dict['interval_len']
 roll_len = para_dict['roll_len']
 
 para_step_ahead = para_dict['para_step_ahead']
 
-
-# ---- parameters from command line
-
-print '--- Argument List:', str(sys.argv)
-method = str(sys.argv[1])
-# linear, bayes
-para_loss_type = str(sys.argv[2])
-#'lk', 'sg'
-train_mode = str(sys.argv[3])
-# oneshot, roll, incre
 
 # ---- parameters specific to models ----
 
@@ -52,8 +64,9 @@ para_bool_bilinear = True
 
 # -- Mixture linear
 para_lr_linear = 0.001
-para_n_epoch_linear = 300
 para_batch_size_linear = 32
+
+para_n_epoch_linear = 300
 #para_l2_linear = 0.001
 
 para_distr_type = 'gaussian'
@@ -76,7 +89,7 @@ para_infer_type = 'variational_nocondi'
 # 'variational-nocondi', 'variational-condi', gibbs 
 # ---- training and evalution methods ----
     
-def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):   
+def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, n_epoch ):   
     
     # stabilize the network by fixing the random seed
     np.random.seed(1)
@@ -98,7 +111,7 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):
                                  para_loss_type, para_distr_type, para_activation_type, para_pos_regu, para_gate_type)
             
             # global para
-            para_n_epoch = para_n_epoch_linear
+            #para_n_epoch = para_n_epoch_linear
             para_batch_size = para_batch_size_linear
             para_keep_prob = 1.0
             
@@ -119,7 +132,7 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):
                                              para_eval_sample_num, para_infer_type, para_num_iter, para_loss_sample_num,\
                                              int(np.shape(xtrain)[0]/para_batch_size_bayes))
             # global para
-            para_n_epoch = para_n_epoch_bayes
+            #para_n_epoch = para_n_epoch_bayes
             para_batch_size = para_batch_size_bayes
             para_keep_prob = 1.0
             
@@ -140,7 +153,7 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):
         tmp_err_epoch = []
         
         #  begin training epochs
-        for epoch in range(para_n_epoch):
+        for epoch in range(n_epoch):
             
             # shuffle traning instances each epoch
             np.random.shuffle(total_idx)
@@ -184,10 +197,11 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):
     # clear the graph in the current session 
     tf.reset_default_graph()
     sess = tf.InteractiveSession()
+    
 
-    return min(tmp_err_epoch, key = lambda x:x[-1])
+    return min(tmp_err_epoch, key = lambda x:x[-1]), [tmp_test_rmse, tmp_test_mae, tmp_test_mape]
     
-    
+'''    
 # retrain the model with the best parameter set-up        
 def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, model_file, best_epoch ): 
     
@@ -277,7 +291,7 @@ def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, mo
             
         print "Model Re-training Finished!"
         
-        '''
+        
         # record prediction and mixture gate values 
         # [3, N]
         py_test = clf.predict(xts_auto, xts_x, para_keep_prob)
@@ -307,7 +321,7 @@ def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, mo
             
             w2 = clf.collect_coeff_values("gate")
             np.asarray(w2[1]).dump( file_addr + "weight_gate_mix.dat" )
-        '''
+        
         
         # reset the model 
         clf.model_reset()
@@ -317,7 +331,8 @@ def test_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, file_addr, mo
     sess = tf.InteractiveSession()
     
     return [ [tmp_test_rmse, tmp_test_mae, tmp_test_mape], min(tmp_epoch_err, key = lambda x:x[-1]) ]
-        
+'''
+
 def preprocess_feature_mixture(xtrain, xtest):
     
     # split training and testing data into three feature groups      
@@ -343,7 +358,7 @@ def preprocess_feature_mixture(xtrain, xtest):
 if train_mode == 'oneshot':
     
     # result log
-    res_file   = "../bt_results/res/oneshot/mix.txt"
+    log_error   = "../bt_results/res/oneshot/mix.txt"
     model_file = '../bt_results/model/mix'
     pred_file  = "../bt_results/res/oneshot/"
     
@@ -380,7 +395,7 @@ if train_mode == 'oneshot':
     tmp_error = train_eval_mixture( xtr, xtr_exter, ytrain, xts, xts_exter, ytest, pred_file, model_file ) 
     
     # save overall errors
-    with open(res_file, "a") as text_file:
+    with open(log_error, "a") as text_file:
         text_file.write( "Mixture %s  %s %s %s : %s  \n"%(method, para_loss_type, para_distr_type, 
                                                           'bi-linear' if para_bool_bilinear else 'linear', \
                                                           str(tmp_error)) ) 
@@ -392,22 +407,32 @@ elif train_mode == 'roll' or 'incre':
     
     # ---- prepare the log
     
-    # result logs
-    res_file   = "../bt_results/res/rolling/reg_mix.txt"
-    model_file = "../bt_results/model/mix_"
-    pred_file  = ""
+    log_error = "../bt_results/res/rolling/log_error_mix.txt"
+    log_epoch  = "../bt_results/res/rolling/log_epoch_mix.txt"
+    
+    roll_title = "\n -------- Rolling --------- \n"
+    incre_title = "\n -------- Incremental --------- \n"
     
     # prepare log files
     if method == 'linear':
         
-        with open(res_file, "a") as text_file:
-            text_file.write("\n %s Mixture %s  %s %s %s %s %s \n\n"%( "\n -------- Rolling --------- \n" if train_mode == 'roll' else "\n -------- Incremental --------- \n", method, para_loss_type, para_distr_type, 'bi-linear' if para_bool_bilinear == True else 'linear', para_activation_type, ('pos_regu' if para_pos_regu == True else 'no_pos_regu') ))
-            
+        with open(log_error, "a") as text_file:
+            text_file.write("\n %s Mixture %s  %s %s %s %s %s \n\n"%(roll_title if train_mode == 'roll' else incre_title,
+                                                                     method,
+                                                                     para_loss_type, 
+                                                                     para_distr_type, 
+                                                                     'bi-linear' if para_bool_bilinear == True else 'linear', 
+                                                                     para_activation_type, 
+                                                                     'pos_regu' if para_pos_regu == True else 'no_pos_regu'))
     
     elif method == 'bayes':
         
-        with open(res_file, "a") as text_file:
-            text_file.write("\n %s Mixture %s  %s %s %s : \n"%( "\n -------- Rolling --------- \n" if train_mode == 'roll' else "\n -------- Incremental --------- \n", method, para_loss_type, para_distr_type, 'bi-linear' if para_bool_bilinear == True else 'linear'))
+        with open(log_error, "a") as text_file:
+            text_file.write("\n %s Mixture %s  %s %s %s : \n"%(roll_title if train_mode == 'roll' else incre_title,
+                                                               method, 
+                                                               para_loss_type, 
+                                                               para_distr_type, 
+                                                               'bi-linear' if para_bool_bilinear == True else 'linear'))
     
     
     # ---- prepare the data
@@ -428,6 +453,8 @@ elif train_mode == 'roll' or 'incre':
     
     
     # ---- the main loop
+    
+    # interval 
     for i in range(roll_len + 1, interval_num + 1):
         
         # reset the graph
@@ -517,36 +544,51 @@ elif train_mode == 'roll' or 'incre':
         
         para_train_vali = []
         
-        for para_l2 in [0.0001, 0.001, 0.01]:
+        for para_lr_linear in [0.001, 0.005, 0.01]:
+            for para_l2 in [0.0001, 0.001, 0.01, 0.1]:
+                
+                tmp_epoch, tmp_tr_rmse, tmp_val_rmse, _ = train_validate_mixture(xtr, 
+                                                                                 xtr_exter, 
+                                                                                 np.asarray(ytrain), 
+                                                                                 xval,
+                                                                                 xval_exter, 
+                                                                                 np.asarray(yval),
+                                                                                 para_n_epoch_linear)
+                
+                para_train_vali.append( [para_lr_linear, para_l2, tmp_epoch, tmp_tr_rmse, tmp_val_rmse] )
             
-            tmp_epoch, tmp_tr_rmse, tmp_val_rmse = train_validate_mixture(xtr, xtr_exter, np.asarray(ytrain), xval, \
-                                                                 xval_exter, np.asarray(yval))
-            
-            para_train_vali.append( [para_l2, tmp_epoch, tmp_tr_rmse, tmp_val_rmse] )
-            
-            print 'Current parameter set-up: \n', para_train_vali[-1], '\n'
+                print 'Current parameter set-up: \n', para_train_vali[-1], '\n'
             
         
         # -- testing phase
         
+        # fix the best parameter and epoch
         final_para = min(para_train_vali, key = lambda x:x[-1])
         para_l2 = final_para[0]
         best_epoch = final_para[1]
         
         print ' ---- Best parameters : ', final_para, '\n'
         
-        # fix the best parameter and epoch
-        
         result_tupe = [final_para[2], final_para[3]]
         
         if len(xts) == 0:
-            test_error = test_mixture(xtr, xtr_exter, np.asarray(ytrain), xval, xval_exter, np.asarray(yval),\
-                                          pred_file, model_file, best_epoch )
+            test_error = train_validate_mixture(xtr, 
+                                                xtr_exter, 
+                                                np.asarray(ytrain), 
+                                                xval, 
+                                                xval_exter, 
+                                                np.asarray(yval),
+                                                best_epoch)
             result_tupe.append(None)
             
         else:
-            test_error = test_mixture(xtr, xtr_exter, np.asarray(ytrain), xts, xts_exter, np.asarray(yts),\
-                                          pred_file, model_file, best_epoch )
+            test_error = train_validate_mixture(xtr, 
+                                                xtr_exter, 
+                                                np.asarray(ytrain), 
+                                                xts, 
+                                                xts_exter, 
+                                                np.asarray(yts),
+                                                best_epoch)
             result_tupe.append(test_error)
         
         print ' ---- Training, validation and testing performance: ', final_para, test_error, '\n'
@@ -554,7 +596,7 @@ elif train_mode == 'roll' or 'incre':
         
         # -- log overall errors
         
-        with open(res_file, "a") as text_file:
+        with open(log_error, "a") as text_file:
             text_file.write("Interval %d : %s, %s \n" %(i-1, str(final_para[:2]), str(result_tupe)))
         
 else:
