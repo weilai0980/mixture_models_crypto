@@ -66,7 +66,7 @@ para_bool_bilinear = True
 para_lr_linear = 0.001
 para_batch_size_linear = 32
 
-para_n_epoch_linear = 300
+para_epoch_linear = 300
 #para_l2_linear = 0.001
 
 para_distr_type = 'gaussian'
@@ -89,7 +89,7 @@ para_infer_type = 'variational_nocondi'
 # 'variational-nocondi', 'variational-condi', gibbs 
 # ---- training and evalution methods ----
     
-def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, n_epoch ):   
+def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest ):   
     
     # stabilize the network by fixing the random seed
     np.random.seed(1)
@@ -153,7 +153,7 @@ def train_validate_mixture( xtr_auto, xtr_x, ytrain, xts_auto, xts_x, ytest, n_e
         tmp_err_epoch = []
         
         #  begin training epochs
-        for epoch in range(n_epoch):
+        for epoch in range(para_epoch_linear):
             
             # shuffle traning instances each epoch
             np.random.shuffle(total_idx)
@@ -552,8 +552,7 @@ elif train_mode == 'roll' or 'incre':
                                                                                  np.asarray(ytrain), 
                                                                                  xval,
                                                                                  xval_exter, 
-                                                                                 np.asarray(yval),
-                                                                                 para_n_epoch_linear)
+                                                                                 np.asarray(yval))
                 
                 para_train_vali.append( [para_lr_linear, para_l2, tmp_epoch, tmp_tr_rmse, tmp_val_rmse] )
             
@@ -562,14 +561,16 @@ elif train_mode == 'roll' or 'incre':
         
         # -- testing phase
         
-        # fix the best parameter and epoch
+        # best global hyper-parameter
         final_para = min(para_train_vali, key = lambda x:x[-1])
-        para_l2 = final_para[0]
-        best_epoch = final_para[1]
+        
+        para_lr_linear = final_para[0]
+        para_l2 = final_para[1]
+        para_epoch_linear = final_para[2]
         
         print ' ---- Best parameters : ', final_para, '\n'
         
-        result_tupe = [final_para[2], final_para[3]]
+        result_tuple = [final_para[3], final_para[4]]
         
         if len(xts) == 0:
             test_error = train_validate_mixture(xtr, 
@@ -577,9 +578,8 @@ elif train_mode == 'roll' or 'incre':
                                                 np.asarray(ytrain), 
                                                 xval, 
                                                 xval_exter, 
-                                                np.asarray(yval),
-                                                best_epoch)
-            result_tupe.append(None)
+                                                np.asarray(yval))
+            result_tuple.append(None)
             
         else:
             test_error = train_validate_mixture(xtr, 
@@ -587,9 +587,8 @@ elif train_mode == 'roll' or 'incre':
                                                 np.asarray(ytrain), 
                                                 xts, 
                                                 xts_exter, 
-                                                np.asarray(yts),
-                                                best_epoch)
-            result_tupe.append(test_error)
+                                                np.asarray(yts))
+            result_tuple.append(test_error)
         
         print ' ---- Training, validation and testing performance: ', final_para, test_error, '\n'
         
@@ -597,7 +596,7 @@ elif train_mode == 'roll' or 'incre':
         # -- log overall errors
         
         with open(log_error, "a") as text_file:
-            text_file.write("Interval %d : %s, %s \n" %(i-1, str(final_para[:2]), str(result_tupe)))
+            text_file.write("Interval %d : %s, %s \n" %(i-1, str(final_para[:2]), str(result_tuple)))
         
 else:
     print '[ERROR] training mode'

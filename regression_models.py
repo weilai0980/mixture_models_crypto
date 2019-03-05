@@ -29,11 +29,11 @@ import xgboost as xgb
 # complete-guide-parameter-tuning-gradient-boosting-gbm-python/
 
 #----Boosting parameters:
-#   learnning rate: 0.05 - 0.2
+#   learnning rate: 0.05 - 0.2, [2-10]/# of trees
 #   n_estimators: 40-70
 
 #----Tree parameters:
-#   max_depth: 3-10
+#   max_depth: 3-10, [4, 6, 8, 10]
 #   max_leaf_nodes
 #   num_samples_split: 0.5-1% of total number 
 #   min_samples_leaf
@@ -94,6 +94,7 @@ def gbt_n_estimatior(maxnum, X, Y, xtest, ytest, fix_lr, bool_clf ):
         pytest  = clf.predict(xtest)
         
         if bool_clf == False:
+            
             tmp_ts = sqrt(sum((pytest-ytest)*(pytest-ytest))/len(ytest))
             score.append( (i, tmp_ts) )
             
@@ -116,9 +117,9 @@ def gbt_n_estimatior(maxnum, X, Y, xtest, ytest, fix_lr, bool_clf ):
     return min(score, key = lambda x: x[1]) if bool_clf == False else max(score, key = lambda x: x[1]) ,\
            best_model, utils_evaluation_score(X, Y, bool_clf, best_model) 
 
-def gbt_tree_para( X, Y, xtest, ytest, depth_range, fix_lr, fix_n_est, bool_clf ):
+def gbt_tree_para(X, Y, xtest, ytest, depth_range, fix_lr, fix_n_est, bool_clf):
     
-    tmpy = Y.reshape( (len(Y),) )
+    tmpy = Y.reshape((len(Y),))
     score = []
     
     tmp_err = 0.0 if bool_clf else np.inf 
@@ -126,13 +127,14 @@ def gbt_tree_para( X, Y, xtest, ytest, depth_range, fix_lr, fix_n_est, bool_clf 
     for i in depth_range:
         
         if bool_clf == False:
+            
             clf=GradientBoostingRegressor(n_estimators = fix_n_est, learning_rate = fix_lr,max_depth = i, \
                                           max_features ='sqrt')
         else:
             clf=GradientBoostingClassifier(n_estimators = fix_n_est,learning_rate = fix_lr,max_depth = i, \
                                            max_features ='sqrt')
             
-        clf.fit( X, tmpy )
+        clf.fit(X, tmpy)
         pytest = clf.predict(xtest)
         
         # regression
@@ -199,7 +201,9 @@ def gbt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, fix_lr, bool_cl
         
         # hyper-parameters with the best validation error 
         result_tuple = [ n_err[0], depth_err[0], best_train, best_vali ]
-        
+    
+    
+    
     # save training prediction under the best model
     py = best_model.predict( xtrain )
     np.savetxt(pred_file + "pytrain_gbt.txt", zip(ytrain, py), delimiter=',')
@@ -224,7 +228,98 @@ def gbt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, fix_lr, bool_cl
     
     return result_tuple
     
+
     
+# ++++ Random forest ++++
+
+#https://www.analyticsvidhya.com/blog/2015/06/tuning-random-forest-model/
+
+# max_features:
+# n_estimators
+# max_depth
+
+def rf_n_depth_estimatior(maxnum, maxdep, X, Y, xtest, ytest, bool_clf):
+        
+    tmpy = Y
+    score = []
+        
+    tmp_err = 0.0 if bool_clf else np.inf 
+
+    for n_trial in range(10,maxnum+1,10):
+        for dep_trial in range(2, maxdep+1):
+            
+            if bool_clf == True:
+                clf = RandomForestClassifier(n_estimators = n_trial, max_depth = dep_trial, max_features = "sqrt")
+            else:
+                clf = RandomForestRegressor(n_estimators = n_trial, max_depth = dep_trial, max_features = "sqrt")
+            
+            clf.fit( X, tmpy )
+            pytest = clf.predict(xtest)
+            
+            if bool_clf == False:
+                tmp_ts = sqrt(sum((pytest-ytest)*(pytest-ytest))/len(ytest))
+                score.append((n_trial, dep_trial, tmp_ts )) 
+                
+                if tmp_ts<tmp_err:
+                    best_pytest = pytest
+                    best_model  = clf
+                
+                    tmp_err = tmp_ts
+                
+            else:
+                tmp_ts = clf.score(xtest, ytest)
+                score.append( (n_trial, dep_trial, tmp_ts ) )
+            
+                if tmp_ts>tmp_err:
+                    best_pytest = pytest
+                    best_model  = clf
+                
+                    tmp_err = tmp_ts
+                                
+    return min(score, key = lambda x: x[2]) if bool_clf==False else max(score, key = lambda x: x[2]),\
+           best_pytest, best_model, utils_evaluation_score(X, Y, bool_clf, best_model)
+
+
+def rf_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, result_file, model_file, pred_file):
+    
+    print "\nStart to train Random Forest"
+
+    n_err, y_hat, best_model, train_err = rf_n_depth_estimatior( 100, 20, xtrain, ytrain, xval, yval, bool_clf )
+    
+    # save the best model
+    joblib.dump(best_model, model_file)
+    
+    # [tree number, tree depth, train error, validation error, test error]
+    result_tuple = [ n_err[0], n_err[1], train_err, n_err[-1] ]
+    
+    # save training prediction under the best model
+    py = best_model.predict( xtrain )
+    np.savetxt(pred_file + "pytrain_rf.txt", zip(ytrain, py), delimiter=',')
+    
+    # save testing or validation prediction under the best model
+    if len(xtest)!=0:
+        py = best_model.predict( xtest )
+        np.savetxt(pred_file + "pytest_rf.txt", zip(ytest, py), delimiter=',')
+        
+        result_tuple.append( utils_evaluation_full_score(xtest, ytest, bool_clf, best_model) )
+    
+    else:
+        py = best_model.predict( xval )
+        np.savetxt(pred_file + "pytest_rf.txt", zip(yval, py), delimiter=',')
+        
+        result_tuple.append( None )
+    
+    # -- output
+    print "number trees, depth, RMSE:", result_tuple
+    
+    # log overall errors
+    with open(result_file, "a") as text_file:
+        text_file.write( "Random Forest: %s \n" %(str(result_tuple)) )
+    
+    # return the result tuple 
+    return result_tuple
+
+  
 # ++++ XGBoosted ++++
 
 # https://www.analyticsvidhya.com/blog/2016/03/
@@ -474,95 +569,6 @@ def xgt_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, num_c
     
 # TO DO: def xgt_l1 for very high dimensional features    
     
-    
-# ++++ Random forest ++++
-
-#https://www.analyticsvidhya.com/blog/2015/06/tuning-random-forest-model/
-
-# max_features:
-# n_estimators
-# max_depth
-
-def rf_n_depth_estimatior(maxnum, maxdep, X, Y, xtest, ytest, bool_clf):
-        
-    tmpy = Y
-    score = []
-        
-    tmp_err = 0.0 if bool_clf else np.inf 
-
-    for n_trial in range(10,maxnum+1,10):
-        for dep_trial in range(2, maxdep+1):
-            
-            if bool_clf == True:
-                clf = RandomForestClassifier(n_estimators = n_trial, max_depth = dep_trial, max_features = "sqrt")
-            else:
-                clf = RandomForestRegressor(n_estimators = n_trial, max_depth = dep_trial, max_features = "sqrt")
-            
-            clf.fit( X, tmpy )
-            pytest = clf.predict(xtest)
-            
-            if bool_clf == False:
-                tmp_ts = sqrt(sum((pytest-ytest)*(pytest-ytest))/len(ytest))
-                score.append((n_trial, dep_trial, tmp_ts )) 
-                
-                if tmp_ts<tmp_err:
-                    best_pytest = pytest
-                    best_model  = clf
-                
-                    tmp_err = tmp_ts
-                
-            else:
-                tmp_ts = clf.score(xtest, ytest)
-                score.append( (n_trial, dep_trial, tmp_ts ) )
-            
-                if tmp_ts>tmp_err:
-                    best_pytest = pytest
-                    best_model  = clf
-                
-                    tmp_err = tmp_ts
-                                
-    return min(score, key = lambda x: x[2]) if bool_clf==False else max(score, key = lambda x: x[2]),\
-           best_pytest, best_model, utils_evaluation_score(X, Y, bool_clf, best_model)
-
-
-def rf_train_validate(xtrain, ytrain, xval, yval, xtest, ytest, bool_clf, result_file, model_file, pred_file):
-    
-    print "\nStart to train Random Forest"
-
-    n_err, y_hat, best_model, train_err = rf_n_depth_estimatior( 100, 20, xtrain, ytrain, xval, yval, bool_clf )
-    
-    # save the best model
-    joblib.dump(best_model, model_file)
-    
-    # [tree number, tree depth, train error, validation error, test error]
-    result_tuple = [ n_err[0], n_err[1], train_err, n_err[-1] ]
-    
-    # save training prediction under the best model
-    py = best_model.predict( xtrain )
-    np.savetxt(pred_file + "pytrain_rf.txt", zip(ytrain, py), delimiter=',')
-    
-    # save testing or validation prediction under the best model
-    if len(xtest)!=0:
-        py = best_model.predict( xtest )
-        np.savetxt(pred_file + "pytest_rf.txt", zip(ytest, py), delimiter=',')
-        
-        result_tuple.append( utils_evaluation_full_score(xtest, ytest, bool_clf, best_model) )
-    
-    else:
-        py = best_model.predict( xval )
-        np.savetxt(pred_file + "pytest_rf.txt", zip(yval, py), delimiter=',')
-        
-        result_tuple.append( None )
-    
-    # -- output
-    print "number trees, depth, RMSE:", result_tuple
-    
-    # log overall errors
-    with open(result_file, "a") as text_file:
-        text_file.write( "Random Forest: %s \n" %(str(result_tuple)) )
-    
-    # return the result tuple 
-    return result_tuple
 
 
 # ------------- the following only for regression -------------
