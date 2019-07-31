@@ -134,8 +134,10 @@ relu or linear output activation
   fine tune
   activation on the last layer
   bias in _linear function
-  
-  
+
+
+
+
 ---- To Do ----
 
 Baseline:
@@ -155,8 +157,16 @@ Model interpretion:
   
   posterior probability of hidden state
   
+  gaussian + softmax
+  dirichelct + gamma 
+  
+  KL regularization + importance learning 
+  
   
 Regularization:
+
+  regularization in per-instance and global importance 
+
   Automatic Relevance Determination
   l1,2
   group lasso, graphical lasso
